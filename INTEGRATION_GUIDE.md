@@ -71,32 +71,58 @@ mqtt.qos=1
 
 ### Format ObservationData (Smartwatch → Backend)
 
+Le backend accepte désormais **2 formats ObservationData** pour compatibilité:
+- Format Android réel (SensorApp): clés timestamp dynamiques
+- Format enrichi/legacy: champs explicites `green` / `red` et `accelerometerPoint`
+
+#### Format Android réel (SensorApp)
+
 ```json
 {
   "patientId": "patient-001",
-  "timestamp": "2025-02-01T15:30:00",
+   "startTime": "2025-02-01T15:25:00",
+   "endTime": "2025-02-01T15:30:00",
   "ppgData": [
     {
-      "timestamp": 1643731800000,
-      "green": 1234.5,
-      "red": 987.3
-    },
-    {
-      "timestamp": 1643731850000,
-      "green": 1245.8,
-      "red": 995.1
+         "2025-02-01T15:25:01.123": 1234.5
     }
   ],
   "accelerometerData": [
     {
-      "timestamp": 1643731800000,
-      "accelerometerPoint": {
+         "2025-02-01T15:25:01.123": {
         "x": 0.15,
         "y": -0.98,
         "z": 0.05
       }
     }
   ]
+}
+```
+
+#### Format compatible (legacy/enrichi)
+
+```json
+{
+   "patientId": "patient-001",
+   "startTime": "2025-02-01T15:25:00",
+   "endTime": "2025-02-01T15:30:00",
+   "ppgData": [
+      {
+         "timestamp": 1643731800000,
+         "green": 1234.5,
+         "red": 987.3
+      }
+   ],
+   "accelerometerData": [
+      {
+         "timestamp": 1643731800000,
+         "accelerometerPoint": {
+            "x": 0.15,
+            "y": -0.98,
+            "z": 0.05
+         }
+      }
+   ]
 }
 ```
 
@@ -173,9 +199,11 @@ Le backend `vitals-management` implémente une conversion optimisée des donnée
 ### Méthodes de Conversion Améliorées
 
 #### `processPPGData()` - Extraction Détaillée PPG
-**Entrée**: List<Map> des données PPG (green, red)  
+**Entrée**: List<Map> des données PPG (format Android timestamp→valeur **ou** format green/red)  
 **Traitement**:
-- Extraction séparée canaux vert/rouge
+- Détection automatique du format reçu
+- Extraction séparée canaux vert/rouge si disponibles
+- Fallback Android: valeur timestamp utilisée comme canal principal
 - Statistiques: min, max, moyenne par canal
 - Appel `calculateHeartRateWithVariability()` pour HR/HRV
 - Appel `estimateSpO2FromPPG()` pour SpO2
@@ -188,8 +216,9 @@ oxygenSaturation
 ```
 
 #### `processAccelerometerData()` - Analyse d'Activité
-**Entrée**: List<Map> des données accéléromètre (x, y, z)  
+**Entrée**: List<Map> des données accéléromètre (format Android timestamp→{x,y,z} **ou** `accelerometerPoint`)  
 **Traitement**:
+- Détection automatique du format reçu
 - Calcul magnitude pour chaque point
 - Extract min/max/moyenne magnitude
 - Calcul variance des magnitudes (= variabilité activité)
@@ -231,7 +260,7 @@ variability (écart-type en BPM), peakCount
    - <85% ou >100% → retourner default 98%
 ```
 
-#### `assessSignalQuality()` - Évaluation Qualité
+#### `assessSignalQuality()` q
 **Critères d'évaluation** (base 100):
 - PPG datapoints < 100 → -20 (données insuffisantes)
 - PPG range (max-min) < 100 → -15 (signal faible)
@@ -271,7 +300,7 @@ docker ps | grep mosquitto-pfa
 cd c:\Users\Admin\Desktop\platformeIOT\vitals-management
 
 # Build et démarrage
-mvn spring-boot:run
+.\mvnw.cmd spring-boot:run
 ```
 
 **Vérifications**:
@@ -354,8 +383,10 @@ SELECT * FROM vitals ORDER BY time DESC LIMIT 10
 
 2. **[MqttConfig.java](vitals-management/src/main/java/com/medtech/vitalsmanagement/config/MqttConfig.java)** ⭐ AMÉLIORÉ
    - Remplace `convertObservationDataToVitalData()` par version améliorée
+   - Ajout parsing robuste des formats Android (timestamp dynamique) et legacy
    - Nouvelle méthode `processPPGData()` pour extraction statistiques PPG
    - Nouvelle méthode `processAccelerometerData()` pour analyse d'activité
+   - Ajout parsing datetime tolérant (`LocalDateTime` et `Instant`)
    - Nouvelle méthode `calculateHeartRateWithVariability()` avec seuil adaptatif
    - Nouvelle méthode `estimateSpO2FromPPG()` avec filtrage outliers
    - Nouvelle méthode `assessSignalQuality()` pour scoring qualité signal
@@ -364,6 +395,7 @@ SELECT * FROM vitals ORDER BY time DESC LIMIT 10
 3. **[ObservationData.java](vitals-management/src/main/java/com/medtech/vitalsmanagement/model/ObservationData.java)**
    - Modèle pour recevoir les données time-series de la smartwatch
    - Champs: `patientId`, `startTime`, `endTime`, `ppgData[]`, `accelerometerData[]`
+   - `ppgData`/`accelerometerData` rendent le modèle compatible multi-format Android + legacy
 
 4. **[application.properties](vitals-management/src/main/resources/application.properties)**
    - Changé `mqtt.topic.prefix` de `sensors/vitals/` à `health/sensorData`
@@ -406,6 +438,8 @@ SELECT * FROM vitals ORDER BY time DESC LIMIT 10
 - Champs non quotés
 - Guillemets simples
 - Virgules finales
+- PPG au format `{"timestamp_iso": valeur}`
+- Accéléromètre au format `{"timestamp_iso": {"x":...,"y":...,"z":...}}`
 
 ### Problème: Conversion de fréquence cardiaque incorrecte
 
@@ -446,6 +480,6 @@ SELECT * FROM vitals ORDER BY time DESC LIMIT 10
 ---
 
 **Date de création**: 2025-02-01  
-**Date dernière mise à jour**: 2026-02-28  
-**Version**: 2.0 (Enhanced Data Preservation)  
+**Date dernière mise à jour**: 2026-03-04  
+**Version**: 2.1 (Android JSON Compatibility)  
 **Auteur**: Integration Team

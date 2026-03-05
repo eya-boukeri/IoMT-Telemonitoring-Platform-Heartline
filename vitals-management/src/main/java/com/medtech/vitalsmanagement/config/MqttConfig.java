@@ -1,6 +1,9 @@
 package com.medtech.vitalsmanagement.config;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -138,7 +141,16 @@ public class MqttConfig {
         options.setKeepAliveInterval(60);
 
         factory.setConnectionOptions(options);
-        log.info("🔐 MQTT ClientFactory configured - CleanSession={}", options.isCleanSession());
+        
+        log.warn("─────────────────────────────────────────────────────────────");
+        log.warn("🔧 MQTT CLIENT FACTORY Configuration");
+        log.warn("   Broker URL: {}", brokerUrl);
+        log.warn("   AutoReconnect: {}", options.isAutomaticReconnect());
+        log.warn("   CleanSession: {}", options.isCleanSession());
+        log.warn("   ConnectionTimeout: {} sec", options.getConnectionTimeout());
+        log.warn("   KeepAliveInterval: {} sec", options.getKeepAliveInterval());
+        log.warn("─────────────────────────────────────────────────────────────");
+        
         return factory;
     }
 
@@ -157,12 +169,20 @@ public class MqttConfig {
 
     @Bean
     public MessageProducer inbound() {
+        // Configuration du topic d'écoute
         // Si le topic se termine par /, ajouter # pour wildcard (ex: sensors/vitals/#)
         // Sinon, utiliser le topic exact (ex: health/sensorData)
         String subscriptionTopic = topicPrefix.endsWith("/") ? topicPrefix + "#" : topicPrefix;
         String resolvedClientId = resolveClientId();
 
-        log.info("🔌 MQTT - Broker: {}, ClientId: {}, Topic: {}, QoS: {}", brokerUrl, resolvedClientId, subscriptionTopic, qos);
+        // 🔌 CLIENT MQTT #1: Backend en tant que SUBSCRIBER (réception des données)
+        log.warn("═══════════════════════════════════════════════════════════════");
+        log.warn("🔌 MQTT CLIENT #1: BACKEND - MODE SUBSCRIBER (Réception)");
+        log.warn("   Broker URL: {}", brokerUrl);
+        log.warn("   Client ID: {}", resolvedClientId);
+        log.warn("   Subscribe Topic: {}", subscriptionTopic);
+        log.warn("   QoS Level: {}", qos);
+        log.warn("═══════════════════════════════════════════════════════════════");
 
         MqttPahoMessageDrivenChannelAdapter adapter =
             new MqttPahoMessageDrivenChannelAdapter(brokerUrl, resolvedClientId, mqttClientFactory(), subscriptionTopic);
@@ -177,7 +197,7 @@ public class MqttConfig {
         // QoS=1: at-least-once delivery (possible duplicates). QoS=0: lower latency, possible loss.
         adapter.setQos(qos);
 
-        log.info("✅ MQTT Adapter ready - QoS={}, ExecutorChannel enabled", qos);
+        log.warn("✅ MQTT Adapter configured - awaiting messages on topic: {}", subscriptionTopic);
         return adapter;
     }
 
@@ -188,10 +208,14 @@ public class MqttConfig {
             String receivedTopic = String.valueOf(message.getHeaders().get("mqtt_receivedTopic"));
             String payload = toPayloadString(message);
 
-            log.debug("📨 MQTT message received - topic={} payload={}", receivedTopic, payload);
+            // 📨 Log visible pour chaque message reçu
+            log.warn("📨 ✅ MESSAGE MQTT REÇU!");
+            log.warn("   Topic: {}", receivedTopic);
+            log.warn("   Payload Size: {} bytes", payload != null ? payload.length() : 0);
+            log.warn("   Headers: {}", message.getHeaders());
 
             if (payload == null || payload.isBlank()) {
-                log.warn("⚠️ Empty payload (topic={}) - skipped", receivedTopic);
+                log.warn("⚠️  Empty payload (topic={}) - skipped", receivedTopic);
                 return;
             }
 
@@ -199,13 +223,13 @@ public class MqttConfig {
                 VitalData vitalData = parseVitalData(payload);
 
                 if (vitalData.getPatientId() == null || vitalData.getPatientId().isBlank()) {
-                    log.warn("⚠️ Missing patientId in vital data - topic={}", receivedTopic);
+                    log.warn("⚠️  Missing patientId in vital data - topic={}", receivedTopic);
                     influxDBService.saveRawPayload(receivedTopic, payload);
                     return;
                 }
 
                 if (dedupEnabled && isDuplicate(vitalData)) {
-                    log.debug("♻️ Duplicate MQTT payload skipped (patientId={}, timestamp={})",
+                    log.debug("♻️  Duplicate MQTT payload skipped (patientId={}, timestamp={})",
                         vitalData.getPatientId(), vitalData.getTimestamp());
                     return;
                 }
@@ -213,12 +237,12 @@ public class MqttConfig {
                 boolean savedToInflux = influxDBService.saveVitalData(vitalData);
 
                 if (savedToInflux) {
-                    log.info("💾 InfluxDB: Patient {} - HR={} Temp={} SpO2={} @ {}",
-                        vitalData.getPatientId(),
+                    log.warn("💾 ✅ SUCCESS: Données sauvegardées dans InfluxDB");
+                    log.warn("   Patient: {}", vitalData.getPatientId());
+                    log.warn("   HR: {} bpm, Temp: {}°C, SpO2: {}%", 
                         vitalData.getHeartRate(),
                         vitalData.getTemperature(),
-                        vitalData.getOxygenSaturation(),
-                        vitalData.getTimestamp());
+                        vitalData.getOxygenSaturation());
 
                     publishToKafka(vitalData);
                 } else {
@@ -274,8 +298,8 @@ public class MqttConfig {
         // Try parsing as ObservationData first (smartwatch time-series format)
         try {
             ObservationData observationData = objectMapper.readValue(payload, ObservationData.class);
-            // If successful and has PPG data, convert to VitalData
-            if (observationData.getPpgData() != null && !observationData.getPpgData().isEmpty()) {
+            // If successful and looks like smartwatch payload, convert to VitalData
+            if (isObservationPayload(observationData)) {
                 log.debug("📊 Parsed as ObservationData (smartwatch format), converting to VitalData");
                 return convertObservationDataToVitalData(observationData);
             }
@@ -297,10 +321,8 @@ public class MqttConfig {
         
         // Extract patient ID and time window
         vitalData.setPatientId(observationData.getPatientId());
-        vitalData.setStartTime(observationData.getStartTime() != null ? 
-            java.time.LocalDateTime.parse(observationData.getStartTime()) : null);
-        vitalData.setEndTime(observationData.getEndTime() != null ? 
-            java.time.LocalDateTime.parse(observationData.getEndTime()) : null);
+        vitalData.setStartTime(parseLocalDateTimeSafely(observationData.getStartTime()));
+        vitalData.setEndTime(parseLocalDateTimeSafely(observationData.getEndTime()));
         
         // Calculate collection duration
         if (vitalData.getStartTime() != null && vitalData.getEndTime() != null) {
@@ -338,19 +360,55 @@ public class MqttConfig {
         return vitalData;
     }
 
+    private boolean isObservationPayload(ObservationData observationData) {
+        if (observationData == null) {
+            return false;
+        }
+
+        return (observationData.getPpgData() != null && !observationData.getPpgData().isEmpty())
+            || (observationData.getAccelerometerData() != null && !observationData.getAccelerometerData().isEmpty())
+            || observationData.getStartTime() != null
+            || observationData.getEndTime() != null;
+    }
+
     /**
      * Extract detailed PPG (photoplethysmogram) data statistics
      * Preserves: min/max/avg green/red values, heart rate range, HRV
      */
-    private void processPPGData(List<Map<String, Double>> ppgData, VitalData vitalData) {
+    private void processPPGData(List<Map<String, Object>> ppgData, VitalData vitalData) {
         List<Double> greenValues = new ArrayList<>();
         List<Double> redValues = new ArrayList<>();
         
-        for (Map<String, Double> measurement : ppgData) {
-            Double greenValue = measurement.get("green");
-            Double redValue = measurement.get("red");
-            if (greenValue != null) greenValues.add(greenValue);
-            if (redValue != null) redValues.add(redValue);
+        for (Map<String, Object> measurement : ppgData) {
+            if (measurement == null || measurement.isEmpty()) {
+                continue;
+            }
+
+            // Format 1 (legacy): {"green":1234.5, "red":987.3}
+            Double greenValue = extractDouble(measurement.get("green"));
+            Double redValue = extractDouble(measurement.get("red"));
+            if (greenValue != null) {
+                greenValues.add(greenValue);
+            }
+            if (redValue != null) {
+                redValues.add(redValue);
+            }
+
+            // Format 2 (SensorApp): {"2026-...":1234.5}
+            if (greenValue == null && redValue == null) {
+                for (Map.Entry<String, Object> entry : measurement.entrySet()) {
+                    if (entry == null) {
+                        continue;
+                    }
+                    if ("timestamp".equalsIgnoreCase(entry.getKey())) {
+                        continue;
+                    }
+                    Double timestampValue = extractDouble(entry.getValue());
+                    if (timestampValue != null) {
+                        greenValues.add(timestampValue);
+                    }
+                }
+            }
         }
 
         vitalData.setPpgDataPoints(greenValues.size());
@@ -393,13 +451,34 @@ public class MqttConfig {
         List<Double> magnitudes = new ArrayList<>();
         
         for (Map<String, Object> measurement : accelerometerData) {
+            if (measurement == null || measurement.isEmpty()) {
+                continue;
+            }
+
+            // Format 1 (legacy): {"accelerometerPoint": {...}}
             Object accelObj = measurement.get("accelerometerPoint");
-            if (accelObj instanceof ObservationData.AccelerometerPoint point) {
+            ObservationData.AccelerometerPoint point = toAccelerometerPoint(accelObj);
+            if (point != null) {
                 // Calculate magnitude: sqrt(x² + y² + z²)
                 double magnitude = Math.sqrt(point.getX() * point.getX() + 
                                            point.getY() * point.getY() + 
                                            point.getZ() * point.getZ());
                 magnitudes.add(magnitude);
+                continue;
+            }
+
+            // Format 2 (SensorApp): {"2026-...": {"x":..., "y":..., "z":...}}
+            for (Map.Entry<String, Object> entry : measurement.entrySet()) {
+                if (entry == null) {
+                    continue;
+                }
+                ObservationData.AccelerometerPoint mappedPoint = toAccelerometerPoint(entry.getValue());
+                if (mappedPoint != null) {
+                    double magnitude = Math.sqrt(mappedPoint.getX() * mappedPoint.getX() +
+                                               mappedPoint.getY() * mappedPoint.getY() +
+                                               mappedPoint.getZ() * mappedPoint.getZ());
+                    magnitudes.add(magnitude);
+                }
             }
         }
 
@@ -549,6 +628,62 @@ public class MqttConfig {
         }
 
         return analysis;
+    }
+
+    private ObservationData.AccelerometerPoint toAccelerometerPoint(Object accelObj) {
+        if (accelObj == null) {
+            return null;
+        }
+
+        if (accelObj instanceof ObservationData.AccelerometerPoint point) {
+            return point;
+        }
+
+        if (accelObj instanceof Map<?, ?> rawMap) {
+            Double x = extractDouble(rawMap.get("x"));
+            Double y = extractDouble(rawMap.get("y"));
+            Double z = extractDouble(rawMap.get("z"));
+            if (x != null && y != null && z != null) {
+                return new ObservationData.AccelerometerPoint(x, y, z);
+            }
+        }
+
+        return null;
+    }
+
+    private Double extractDouble(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+
+        try {
+            return Double.parseDouble(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private LocalDateTime parseLocalDateTimeSafely(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        try {
+            return LocalDateTime.parse(value);
+        } catch (Exception ignored) {
+        }
+
+        try {
+            return Instant.parse(value).atOffset(ZoneOffset.UTC).toLocalDateTime();
+        } catch (Exception ignored) {
+        }
+
+        log.warn("⚠️ Unable to parse datetime value: {}", value);
+        return null;
     }
 
     private Double estimateSpO2FromPPG(List<Double> greenValues, List<Double> redValues) {

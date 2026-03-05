@@ -1,6 +1,5 @@
 package com.medtech.vitalsmanagement.model;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -25,11 +24,15 @@ public class ObservationData {
     private String startTime;  // Format: ISO LocalDateTime
     private String endTime;    // Format: ISO LocalDateTime
     
-    // PPG data: List of maps with timestamp -> value
-    private List<Map<String, Double>> ppgData;
+    // PPG data supports both formats:
+    // 1) {"green":1234.5, "red":987.3}
+    // 2) {"2026-03-04T10:12:13.123":1234.5}
+    private List<Map<String, Object>> ppgData;
     
-    // Accelerometer data: List of maps with timestamp -> {x, y, z}
-    private List<Map<String, AccelerometerPoint>> accelerometerData;
+    // Accelerometer data supports both formats:
+    // 1) {"accelerometerPoint":{"x":0.1,"y":-0.9,"z":0.2}}
+    // 2) {"2026-03-04T10:12:13.123":{"x":0.1,"y":-0.9,"z":0.2}}
+    private List<Map<String, Object>> accelerometerData;
     
     @Data
     @NoArgsConstructor
