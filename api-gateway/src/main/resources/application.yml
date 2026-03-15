@@ -1,0 +1,73 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://keycloak:8080/realms/iot-sante
+          jwk-set-uri: http://keycloak:8080/realms/iot-sante/protocol/openid-connect/certs
+
+  cloud:
+    gateway:
+      routes:
+
+        - id: vitals-management
+          uri: http://vitals-management:9090
+          predicates:
+            - Path=/api/vitals/**
+          filters:
+            - StripPrefix=1
+
+        - id: alert-service
+          uri: http://alert-service:8082
+          predicates:
+            - Path=/api/alerts/**
+          filters:
+            - StripPrefix=1
+
+        - id: dashboard-service
+          uri: http://dashboard-service:8083
+          predicates:
+            - Path=/api/dashboard/**
+          filters:
+            - StripPrefix=1
+
+        - id: health-public
+          uri: http://vitals-management:9090
+          predicates:
+            - Path=/health
+          filters:
+            - StripPrefix=0
+
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"
+              - "http://localhost:4200"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 30s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    com.medtech.gateway: DEBUG

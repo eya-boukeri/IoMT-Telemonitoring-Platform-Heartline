@@ -1,0 +1,14 @@
+﻿# Maven / Java build
+target/
+
+# Java crash logs
+hs_err_pid*.log
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Env
+.env
+*.log

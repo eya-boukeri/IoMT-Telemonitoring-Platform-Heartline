@@ -1,0 +1,98 @@
+services:
+
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto-pfa-v2
+    ports:
+      - "1885:1883"
+      - "9002:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+    networks:
+      - medtech-network
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb-pfa-v2
+    ports:
+      - "8088:8086"
+    volumes:
+      - influxdb-data-v2:/var/lib/influxdb2
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: password123
+      DOCKER_INFLUXDB_INIT_ORG: myorg
+      DOCKER_INFLUXDB_INIT_BUCKET: medical_data
+      DOCKER_INFLUXDB_INIT_RETENTION: 30d
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-secret-token
+    networks:
+      - medtech-network
+
+  kafka:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: kafka-pfa-v2
+    ports:
+      - "9093:9092"
+    command:
+      - redpanda start
+      - --overprovisioned
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
+    networks:
+      - medtech-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: keycloak-pfa
+    ports:
+      - "8180:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+    command: start-dev
+    networks:
+      - medtech-network
+
+  vitals-management:
+    build: ../vitals-management
+    container_name: vitals-management-pfa
+    ports:
+      - "9090:9090"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: my-secret-token
+      INFLUXDB_ORG: myorg
+      INFLUXDB_BUCKET: medical_data
+      MQTT_BROKER_URL: tcp://mosquitto:1883
+    depends_on:
+      - kafka
+      - influxdb
+      - mosquitto
+    networks:
+      - medtech-network
+
+  api-gateway:
+    build: ../api-gateway
+    container_name: api-gateway-pfa
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/iot-sante
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/iot-sante/protocol/openid-connect/certs
+    depends_on:
+      - keycloak
+      - vitals-management
+    networks:
+      - medtech-network
+
+networks:
+  medtech-network:
+    driver: bridge
+
+volumes:
+  influxdb-data-v2:
