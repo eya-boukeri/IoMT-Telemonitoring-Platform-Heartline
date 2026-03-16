@@ -1,5 +1,4 @@
 services:
-
   mosquitto:
     image: eclipse-mosquitto:latest
     container_name: mosquitto-pfa-v2
@@ -44,6 +43,43 @@ services:
       - --check=false
     networks:
       - medtech-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-pfa
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ingestion_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - medtech-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin-pfa
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: eyaboukari91@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: eya
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - medtech-network
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
 
   keycloak:
     image: quay.io/keycloak/keycloak:23.0
@@ -96,3 +132,5 @@ networks:
 
 volumes:
   influxdb-data-v2:
+  postgres-data:
+  pgadmin-data:

@@ -80,6 +80,78 @@ public class InfluxDBService {
             point.addField("oxygenSaturation", vitalData.getOxygenSaturation());
             hasField = true;
         }
+        if (vitalData.getHeartRateMin() != null) {
+            point.addField("heartRateMin", vitalData.getHeartRateMin());
+            hasField = true;
+        }
+        if (vitalData.getHeartRateMax() != null) {
+            point.addField("heartRateMax", vitalData.getHeartRateMax());
+            hasField = true;
+        }
+        if (vitalData.getHeartRateVariability() != null) {
+            point.addField("heartRateVariability", vitalData.getHeartRateVariability());
+            hasField = true;
+        }
+        if (vitalData.getDetectedPeaks() != null) {
+            point.addField("detectedPeaks", vitalData.getDetectedPeaks());
+            hasField = true;
+        }
+        if (vitalData.getPpgGreenMin() != null) {
+            point.addField("ppgGreenMin", vitalData.getPpgGreenMin());
+            hasField = true;
+        }
+        if (vitalData.getPpgGreenMax() != null) {
+            point.addField("ppgGreenMax", vitalData.getPpgGreenMax());
+            hasField = true;
+        }
+        if (vitalData.getPpgGreenAverage() != null) {
+            point.addField("ppgGreenAverage", vitalData.getPpgGreenAverage());
+            hasField = true;
+        }
+        if (vitalData.getPpgRedMin() != null) {
+            point.addField("ppgRedMin", vitalData.getPpgRedMin());
+            hasField = true;
+        }
+        if (vitalData.getPpgRedMax() != null) {
+            point.addField("ppgRedMax", vitalData.getPpgRedMax());
+            hasField = true;
+        }
+        if (vitalData.getPpgRedAverage() != null) {
+            point.addField("ppgRedAverage", vitalData.getPpgRedAverage());
+            hasField = true;
+        }
+        if (vitalData.getPpgDataPoints() != null) {
+            point.addField("ppgDataPoints", vitalData.getPpgDataPoints());
+            hasField = true;
+        }
+        if (vitalData.getAccelerometerMagnitudeAverage() != null) {
+            point.addField("accelerometerMagnitudeAverage", vitalData.getAccelerometerMagnitudeAverage());
+            hasField = true;
+        }
+        if (vitalData.getAccelerometerMagnitudeMax() != null) {
+            point.addField("accelerometerMagnitudeMax", vitalData.getAccelerometerMagnitudeMax());
+            hasField = true;
+        }
+        if (vitalData.getAccelerometerVariance() != null) {
+            point.addField("accelerometerVariance", vitalData.getAccelerometerVariance());
+            hasField = true;
+        }
+        if (vitalData.getAccelerometerDataPoints() != null) {
+            point.addField("accelerometerDataPoints", vitalData.getAccelerometerDataPoints());
+            hasField = true;
+        }
+        if (vitalData.getCollectionDurationSeconds() != null) {
+            point.addField("collectionDurationSeconds", vitalData.getCollectionDurationSeconds());
+            hasField = true;
+        }
+        if (vitalData.getSignalQualityScore() != null) {
+            point.addField("signalQualityScore", vitalData.getSignalQualityScore());
+            hasField = true;
+        }
+        if (vitalData.getSignalQuality() != null && !vitalData.getSignalQuality().isBlank()) {
+            point.addField("signalQuality", vitalData.getSignalQuality());
+            hasField = true;
+        }
 
         if (!hasField) {
             log.warn("InfluxDB: no fields to write for payload: {}", vitalData);
