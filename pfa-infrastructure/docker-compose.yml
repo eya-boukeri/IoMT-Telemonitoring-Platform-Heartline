@@ -145,6 +145,19 @@ services:
     networks:
       - medtech-network
 
+  medical-dashboard:
+    build: ../medical-dashboard
+    container_name: medical-dashboard-pfa
+    ports:
+      - "5173:80"
+    environment:
+      REACT_APP_API_URL: http://localhost:8080/api
+    depends_on:
+      - api-gateway
+      - vitals-management
+    networks:
+      - medtech-network
+
 networks:
   medtech-network:
     driver: bridge

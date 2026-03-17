@@ -3,8 +3,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Activity, Bell, Heart, Thermometer, Wind, Users, AlertTriangle } from 'lucide-react';
 import './App.css';
 
-const API_BASE_URL = '/api/vitals';
-const SSE_BASE_URL = 'http://localhost:9090/api/vitals'; // SSE nécessite l'URL complète
+const API_ROOT = import.meta.env.REACT_APP_API_URL || '/api';
+const API_BASE_URL = `${API_ROOT}/vitals`;
+const SSE_BASE_URL = API_BASE_URL;
 
 function App() {
   const [patients, setPatients] = useState([]);
