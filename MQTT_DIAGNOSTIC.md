@@ -10,7 +10,7 @@
 │                                                             │
 │  CLIENT #1 (PUBLISHER)          BROKER (Mosquitto)         │
 │  ──────────────────────         ────────────────           │
-│  tcp://192.168.68.151:1884      Port 1884 (exposed)        │
+│  tcp://192.168.68.151:1885      Port 1885 (exposed)        │
 │  → Publishes to:                Port 1883 (internal)       │
 │    health/sensorData                                       │
 │                                                             │
@@ -18,7 +18,7 @@
 │                                     BACKEND                │
 │                                     ──────────             │
 │                                 CLIENT #2 (SUBSCRIBER)     │
-│                                 tcp://127.0.0.1:1884       │
+│                                 tcp://127.0.0.1:1885       │
 │                                 Subscribes to:              │
 │                                 health/sensorData          │
 │                                                             │
@@ -34,7 +34,7 @@
 ```
 ═══════════════════════════════════════════════════════════════
 🔌 MQTT CLIENT #1: BACKEND - MODE SUBSCRIBER (Réception)
-   Broker URL: tcp://127.0.0.1:1884
+  Broker URL: tcp://127.0.0.1:1885
    Client ID: vitals-management-backend-client-...
    Subscribe Topic: health/sensorData
    QoS Level: 1
@@ -42,7 +42,7 @@
 
 ─────────────────────────────────────────────────────────────
 🔧 MQTT CLIENT FACTORY Configuration
-   Broker URL: tcp://127.0.0.1:1884
+  Broker URL: tcp://127.0.0.1:1885
    AutoReconnect: true
    CleanSession: true
    ConnectionTimeout: 10 sec
@@ -158,7 +158,7 @@ docker exec -it mosquitto-pfa mosquitto_pub \
 
 ### Étape 4: Lancer SensorApp et observer
 ```
-1. Assurez-vous que l'IP Android est: tcp://192.168.68.151:1884
+1. Assurez-vous que l'IP Android est: tcp://192.168.68.151:1885
 2. Lancez l'app et vérifiez "Statut MQTT: ✅ Connecté"
 3. Commencez le tracking
 4. Observez le terminal mosquitto_sub pour voir les messages
@@ -174,7 +174,7 @@ docker exec -it mosquitto-pfa mosquitto_pub \
 // Doit écouter les ACKNOWLEDGEMENTS du broker
 MqttManager.initialize(
     context, 
-    serverUri = "tcp://192.168.68.151:1884",  // ✅ Correct (IP externe PC)
+    serverUri = "tcp://192.168.68.151:1885",  // ✅ Correct (IP externe PC)
     clientId = "SensorApp-${Build.MODEL}"
 )
 
@@ -189,7 +189,7 @@ MqttManager.publish(
 
 ### Backend Spring Boot (application.properties):
 ```properties
-mqtt.broker.url=tcp://127.0.0.1:1884        # ✅ localhost (Docker container visible)
+mqtt.broker.url=tcp://127.0.0.1:1885        # ✅ localhost (Docker container visible)
 mqtt.topic.prefix=health/sensorData         # ✅ Topic exact
 mqtt.qos=1                                  # ✅ At-least-once
 logging.level.com.medtech=DEBUG             # ✅ Logs visibles
@@ -198,7 +198,7 @@ logging.level.com.medtech=DEBUG             # ✅ Logs visibles
 ### Docker Mosquitto (docker-compose.yml):
 ```yaml
 ports:
-  - "1884:1883"  # ✅ Port 1884 exposé en externe, 1883 en interne
+  - "1885:1883"  # ✅ Port 1885 exposé en externe, 1883 en interne
 ```
 
 ---

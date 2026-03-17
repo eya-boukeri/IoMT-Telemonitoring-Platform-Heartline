@@ -3,8 +3,8 @@
 ## Architecture
 - **Backend** : Spring Boot (port 9090)
 - **Frontend** : React + Vite (port 5173)
-- **Base de données** : InfluxDB (port 8086)
-- **MQTT Broker** : Mosquitto (port 1884)
+- **Base de données** : InfluxDB (port 8088)
+- **MQTT Broker** : Mosquitto (port 1885)
 
 ## 🚀 Démarrage Rapide
 
@@ -67,8 +67,8 @@ Le dashboard sera accessible sur **http://localhost:5173**
 ### Backend (application.properties)
 ```properties
 server.port=9090
-influxdb.url=http://localhost:8086
-mqtt.broker.url=tcp://127.0.0.1:1884
+influxdb.url=http://localhost:8088
+mqtt.broker.url=tcp://127.0.0.1:1885
 ```
 
 ### Frontend (vite.config.js)
@@ -117,7 +117,7 @@ L'application Android doit envoyer les données au format suivant sur le topic `
 ```
 
 Configuration MQTT pour l'application :
-- **Broker** : `tcp://[IP_DU_PC]:1884`
+- **Broker** : `tcp://[IP_DU_PC]:1885`
 - **Topic** : `health/sensorData`
 - **QoS** : 2
 

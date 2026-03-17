@@ -112,6 +112,24 @@ services:
     networks:
       - medtech-network
 
+  ingestion-service:
+    build: ../ingestion-service
+    container_name: ingestion-service-pfa
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ingestion_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MQTT_BROKER_URL: tcp://mosquitto:1883
+    depends_on:
+      - postgres
+      - kafka
+      - mosquitto
+    networks:
+      - medtech-network
+
   api-gateway:
     build: ../api-gateway
     container_name: api-gateway-pfa
@@ -123,6 +141,7 @@ services:
     depends_on:
       - keycloak
       - vitals-management
+      - ingestion-service
     networks:
       - medtech-network
 

@@ -20,22 +20,21 @@ spring:
           uri: http://vitals-management:9090
           predicates:
             - Path=/api/vitals/**
-          filters:
-            - StripPrefix=1
+
+        - id: ingestion-service
+          uri: http://ingestion-service:8081
+          predicates:
+            - Path=/api/ingestion/**
 
         - id: alert-service
           uri: http://alert-service:8082
           predicates:
             - Path=/api/alerts/**
-          filters:
-            - StripPrefix=1
 
         - id: dashboard-service
           uri: http://dashboard-service:8083
           predicates:
             - Path=/api/dashboard/**
-          filters:
-            - StripPrefix=1
 
         - id: health-public
           uri: http://vitals-management:9090

@@ -7,7 +7,7 @@ Ce document décrit l'intégration complète entre l'application smartwatch (Sen
 ## Architecture du Système
 
 ```
-┌─────────────────┐      MQTT (port 1884)      ┌──────────────────┐
+┌─────────────────┐      MQTT (port 1885)      ┌──────────────────┐
 │   SensorApp     │ ────────────────────────────> │   Mosquitto      │
 │  (Smartwatch)   │   Topic: health/sensorData   │  MQTT Broker     │
 │  Android Kotlin │                              │  (Docker)        │
@@ -37,7 +37,7 @@ Le broker MQTT tourne dans un conteneur Docker avec la configuration suivante:
 
 - **Container**: `mosquitto-pfa`
 - **Image**: `eclipse-mosquitto:latest`
-- **Port mapping**: `1884:1883` (host:container)
+- **Port mapping**: `1885:1883` (host:container)
 - **Commande pour démarrer**:
   ```bash
   docker start mosquitto-pfa
@@ -49,7 +49,7 @@ Le broker MQTT tourne dans un conteneur Docker avec la configuration suivante:
 
 Configuration MQTT:
 ```kotlin
-private const val MQTT_BROKER = "tcp://10.0.2.2:1884"  // Android emulator to host
+private const val MQTT_BROKER = "tcp://10.0.2.2:1885"  // Android emulator to host
 private const val MQTT_TOPIC = "health/sensorData"
 ```
 
@@ -61,7 +61,7 @@ private const val MQTT_TOPIC = "health/sensorData"
 
 Configuration MQTT:
 ```properties
-mqtt.broker.url=tcp://127.0.0.1:1884
+mqtt.broker.url=tcp://127.0.0.1:1885
 mqtt.client.id=spring-backend
 mqtt.topic.prefix=health/sensorData
 mqtt.qos=1
@@ -324,7 +324,7 @@ cd c:\Users\Admin\Desktop\platformeIOT\vitals-management
 
 ```kotlin
 // Remplacer 10.0.2.2 par l'IP de votre PC (ex: 192.168.1.100)
-private const val MQTT_BROKER = "tcp://192.168.1.100:1884"
+private const val MQTT_BROKER = "tcp://192.168.1.100:1885"
 ```
 
 ### Étape 4: Vérifier les Données
@@ -356,14 +356,14 @@ Installer mosquitto-clients:
 choco install mosquitto
 
 # Subscribe au topic
-mosquitto_sub -h localhost -p 1884 -t "health/sensorData" -v
+mosquitto_sub -h localhost -p 1885 -t "health/sensorData" -v
 ```
 
 #### Via InfluxDB
 
 ```bash
 # Connexion à InfluxDB (selon votre config)
-influx -host localhost -port 8086
+influx -host localhost -port 8088
 
 # Query
 USE vitals_db
@@ -403,7 +403,7 @@ SELECT * FROM vitals ORDER BY time DESC LIMIT 10
 ### Android SensorApp
 
 1. **[SensorDataService.kt](PROJET PLATEFORME IOT/SensorApp/SensorApp/app/src/main/java/com/example/sensorapp/presentation/SensorDataService.kt)**
-   - Changé `MQTT_BROKER` de `tcp://broker.emqx.io:1883` à `tcp://10.0.2.2:1884`
+   - Changé `MQTT_BROKER` de `tcp://broker.emqx.io:1883` à `tcp://10.0.2.2:1885`
 
 ### DashboardApi (si utilisé en parallèle)
 
@@ -411,7 +411,7 @@ SELECT * FROM vitals ORDER BY time DESC LIMIT 10
    - Externalisé la configuration avec `@Value`
 
 2. **[application.properties](PROJET PLATEFORME IOT/DashboardApi/src/main/resources/application.properties)**
-   - Ajouté `mqtt.broker.url=tcp://localhost:1884`
+   - Ajouté `mqtt.broker.url=tcp://localhost:1885`
 
 ## Dépannage
 
@@ -419,7 +419,7 @@ SELECT * FROM vitals ORDER BY time DESC LIMIT 10
 
 **Vérifications**:
 1. Mosquitto est actif: `docker ps | grep mosquitto`
-2. Firewall autorise le port 1884
+2. Firewall autorise le port 1885
 3. Topic correspond exactement: `health/sensorData` (case-sensitive)
 
 ### Problème: SensorApp ne se connecte pas (émulateur)

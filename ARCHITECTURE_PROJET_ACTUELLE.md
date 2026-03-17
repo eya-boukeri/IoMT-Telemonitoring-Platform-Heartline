@@ -27,11 +27,11 @@ Le workspace est organise autour de 3 briques principales:
 ### 2.2 Architecture physique locale (ports)
 - Mosquitto: container `mosquitto-pfa`
   - port interne: `1883`
-  - port expose host: `1884`
+  - port expose host: `1885`
 - InfluxDB: container `influxdb-pfa`
-  - port expose: `8086`
+  - port expose: `8088`
 - Kafka/Redpanda: container `kafka-pfa`
-  - port expose: `9092`
+  - port expose: `9093`
 - Backend Spring Boot: `9090`
 - Frontend Vite: `5173`
 
@@ -62,11 +62,11 @@ Configuration broker: `pfa-infrastructure/mosquitto/config/mosquitto.conf`
 #### Config principale
 Fichier: `vitals-management/src/main/resources/application.properties`
 - `server.port=9090`
-- MQTT broker: `tcp://127.0.0.1:1884`
+- MQTT broker: `tcp://127.0.0.1:1885`
 - topic MQTT: `health/sensorData`
-- Kafka bootstrap: `localhost:9092`
+- Kafka bootstrap: `localhost:9093`
 - topic vitals: `vitals-events`
-- InfluxDB URL: `http://localhost:8086`
+- InfluxDB URL: `http://localhost:8088`
 
 #### Modules backend
 - `config/MqttConfig.java`

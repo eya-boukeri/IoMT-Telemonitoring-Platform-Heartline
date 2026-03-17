@@ -55,7 +55,7 @@ $mosquittoLogs = docker logs mosquitto-pfa 2>&1 | Select-String "listening"
 if ($mosquittoLogs) {
     Write-Host "✅ Mosquitto est en écoute" @Success
     Write-Host "   Port interne: 1883 (MQTT)" @Success
-    Write-Host "   Port externe: 1884 (mappé)" @Success
+    Write-Host "   Port externe: 1885 (mappé)" @Success
 } else {
     Write-Host "⚠️  Impossible de confirmer que Mosquitto écoute" @Info
 }
@@ -161,16 +161,16 @@ Write-Host @"
 🏗️  Architecture MQTT:
 
    Android SensorApp (CLIENT #1 - PUBLISHER)
-   ↓ tcp://192.168.68.151:1884
+    ↓ tcp://192.168.68.151:1885
    ↓ Publishes: health/sensorData
    ↓
    ┌─────────────────────────────────────┐
    │  Mosquitto Broker (Docker)          │
-   │  Port 1883 (interne) / 1884 (externe)
+    │  Port 1883 (interne) / 1885 (externe)
    └─────────────────────────────────────┘
    ↓
    ↓ Subscribes: health/sensorData
-   ↓ tcp://127.0.0.1:1884
+    ↓ tcp://127.0.0.1:1885
    Backend Spring Boot (CLIENT #2 - SUBSCRIBER)
 
 ✅ Prochaines étapes:
