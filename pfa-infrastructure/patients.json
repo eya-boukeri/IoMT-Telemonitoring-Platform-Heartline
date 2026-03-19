@@ -1,0 +1,35 @@
+﻿[
+  {
+    "patientId": "P001",
+    "patientName": "Jean Martin",
+    "age": 72,
+    "deviceId": "watch-samsung-001",
+    "ppgData": [98, 102, 101, 103, 99, 101, 102, 100, 101, 102, 103, 101, 100, 102, 101],
+    "heartRate": 72,
+    "spo2": 98,
+    "activity": 0.8,
+    "timestamp": "2026-03-18T10:30:00Z"
+  },
+  {
+    "patientId": "P002",
+    "patientName": "Marie Dupont",
+    "age": 68,
+    "deviceId": "watch-samsung-002",
+    "ppgData": [112, 108, 110, 109, 111, 110, 109, 112, 111, 110, 108, 109, 111, 110, 112],
+    "heartRate": 82,
+    "spo2": 97,
+    "activity": 1.2,
+    "timestamp": "2026-03-18T10:30:05Z"
+  },
+  {
+    "patientId": "P003",
+    "patientName": "Pierre Lambert",
+    "age": 65,
+    "deviceId": "watch-samsung-003",
+    "ppgData": [88, 85, 87, 86, 89, 88, 87, 86, 88, 89, 87, 86, 88, 87, 86],
+    "heartRate": 62,
+    "spo2": 99,
+    "activity": 0.3,
+    "timestamp": "2026-03-18T10:30:10Z"
+  }
+]
