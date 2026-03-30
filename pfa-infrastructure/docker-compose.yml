@@ -144,7 +144,15 @@ services:
       - ingestion-service
     networks:
       - medtech-network
-
+    keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+   
+    
+   
+    command: start-dev
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+  
   medical-dashboard:
     build: ../medical-dashboard
     container_name: medical-dashboard-pfa
@@ -166,3 +174,4 @@ volumes:
   influxdb-data-v2:
   postgres-data:
   pgadmin-data:
+  keycloak-data:
