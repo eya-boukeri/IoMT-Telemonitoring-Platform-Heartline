@@ -26,15 +26,10 @@ spring:
           predicates:
             - Path=/api/ingestion/**
 
-        - id: alert-service
-          uri: http://alert-service:8082
+        - id: notification-service
+          uri: http://notification-service:9095
           predicates:
-            - Path=/api/alerts/**
-
-        - id: dashboard-service
-          uri: http://dashboard-service:8083
-          predicates:
-            - Path=/api/dashboard/**
+            - Path=/api/notifications/**
 
         - id: health-public
           uri: http://vitals-management:9090

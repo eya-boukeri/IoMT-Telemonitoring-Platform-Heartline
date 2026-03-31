@@ -9,11 +9,8 @@ const MAX_POINTS = 50;
 const AUTO_UPDATE_MS = 3000;
 
 const DEFAULT_METRICS = {
-  heartRate: 78,
-  oxygenSaturation: 98,
-  temperature: 36.8,
-  bloodPressureSystolic: 120,
-  bloodPressureDiastolic: 78,
+  ppgSignal: 1250,
+  ecgSignal: 0,
 };
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -26,56 +23,61 @@ const toNumber = (value) => {
 
 const randomFloat = (min, max) => Math.random() * (max - min) + min;
 
+const toTimestampMs = (timestamp) => {
+  const value = Date.parse(timestamp || '');
+  return Number.isFinite(value) ? value : Date.now();
+};
+
+const buildSyntheticEcg = (timestamp, ppgSignal) => {
+  const t = toTimestampMs(timestamp) / 1000;
+  const beat = t % 0.85;
+  const pWave = Math.exp(-Math.pow((beat - 0.16) / 0.04, 2)) * 0.14;
+  const qrs = Math.exp(-Math.pow((beat - 0.25) / 0.015, 2)) * 1.15;
+  const tWave = Math.exp(-Math.pow((beat - 0.46) / 0.08, 2)) * 0.28;
+  const baseline = Math.sin(t * 2 * Math.PI * 0.4) * 0.03;
+  const modulation = Number.isFinite(ppgSignal) ? ((ppgSignal % 250) / 250 - 0.5) * 0.04 : 0;
+  return baseline + pWave + qrs + tWave + modulation - 0.06;
+};
+
 const buildVitalPoint = (raw, previousPoint) => {
   const previous = previousPoint || DEFAULT_METRICS;
   const base = raw || {};
   const timestamp = base.timestamp || new Date().toISOString();
 
-  const heartRate = clamp(
-    toNumber(base.heartRate) ?? previous.heartRate ?? DEFAULT_METRICS.heartRate,
-    45,
-    170
+  const ppgSignal = clamp(
+    toNumber(base.ppgSignal) ??
+      toNumber(base.ppg) ??
+      toNumber(base.ppgGreenAverage) ??
+      toNumber(base.ppgMean) ??
+      previous.ppgSignal ??
+      DEFAULT_METRICS.ppgSignal,
+    0,
+    6000
   );
-  const oxygenSaturation = clamp(
-    toNumber(base.oxygenSaturation) ?? previous.oxygenSaturation ?? DEFAULT_METRICS.oxygenSaturation,
-    80,
-    100
-  );
-  const temperature = clamp(
-    toNumber(base.temperature) ?? previous.temperature ?? DEFAULT_METRICS.temperature,
-    34,
-    41
-  );
-  const bloodPressureSystolic = clamp(
-    toNumber(base.bloodPressureSystolic) ?? previous.bloodPressureSystolic ?? DEFAULT_METRICS.bloodPressureSystolic,
-    80,
-    200
-  );
-  const bloodPressureDiastolic = clamp(
-    toNumber(base.bloodPressureDiastolic) ?? previous.bloodPressureDiastolic ?? DEFAULT_METRICS.bloodPressureDiastolic,
-    45,
-    130
+
+  const ecgSignal = clamp(
+    toNumber(base.ecgSignal) ?? toNumber(base.ecg) ?? buildSyntheticEcg(timestamp, ppgSignal),
+    -2,
+    2
   );
 
   return {
     timestamp,
-    heartRate,
-    oxygenSaturation,
-    temperature,
-    bloodPressureSystolic,
-    bloodPressureDiastolic,
+    ppgSignal,
+    ecgSignal,
   };
 };
 
 const evolveVitalPoint = (previousPoint) => {
   const prev = previousPoint || DEFAULT_METRICS;
+  const timestamp = new Date().toISOString();
+  const ppgSignal = clamp((prev.ppgSignal || DEFAULT_METRICS.ppgSignal) + randomFloat(-45, 45), 700, 3200);
+  const ecgSignal = clamp(buildSyntheticEcg(timestamp, ppgSignal) + randomFloat(-0.03, 0.03), -2, 2);
+
   return {
-    timestamp: new Date().toISOString(),
-    heartRate: clamp((prev.heartRate || DEFAULT_METRICS.heartRate) + randomFloat(-2.2, 2.2), 52, 138),
-    oxygenSaturation: clamp((prev.oxygenSaturation || DEFAULT_METRICS.oxygenSaturation) + randomFloat(-0.8, 0.6), 90, 100),
-    temperature: clamp((prev.temperature || DEFAULT_METRICS.temperature) + randomFloat(-0.12, 0.12), 35.5, 39.5),
-    bloodPressureSystolic: clamp((prev.bloodPressureSystolic || DEFAULT_METRICS.bloodPressureSystolic) + randomFloat(-2.6, 2.6), 95, 160),
-    bloodPressureDiastolic: clamp((prev.bloodPressureDiastolic || DEFAULT_METRICS.bloodPressureDiastolic) + randomFloat(-2.0, 2.0), 58, 108),
+    timestamp,
+    ppgSignal,
+    ecgSignal,
   };
 };
 
@@ -88,85 +90,14 @@ const formatTime = (timestamp) => {
   });
 };
 
-const computeMetricStats = (points, key) => {
-  const values = points.map((point) => point[key]).filter((value) => Number.isFinite(value));
-  if (!values.length) return { last: null, min: null, max: null, avg: null };
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
-
-  return {
-    last: values[values.length - 1],
-    min,
-    max,
-    avg,
-  };
-};
-
-const computeBloodPressureStats = (points) => {
-  const systolic = computeMetricStats(points, 'bloodPressureSystolic');
-  const diastolic = computeMetricStats(points, 'bloodPressureDiastolic');
-  return { systolic, diastolic };
-};
-
 function App() {
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [vitalData, setVitalData] = useState([]);
-  const [alerts, setAlerts] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState(null);
   const eventSourceRef = useRef(null);
   const lastPointAtRef = useRef(0);
-
-  const checkAlerts = useCallback((vital) => {
-    const generatedAlerts = [];
-
-    if (vital.heartRate >= 110) {
-      generatedAlerts.push({
-        id: `${Date.now()}-tachy`,
-        level: 'critical',
-        title: '🚨 Tachycardie',
-        message: `Fréquence cardiaque critique: ${vital.heartRate.toFixed(1)} bpm`,
-        timestamp: vital.timestamp,
-      });
-    }
-
-    if (vital.oxygenSaturation <= 92) {
-      generatedAlerts.push({
-        id: `${Date.now()}-hypoxie`,
-        level: 'critical',
-        title: '🚨 Hypoxie',
-        message: `SpO2 dangereuse: ${vital.oxygenSaturation.toFixed(1)}%`,
-        timestamp: vital.timestamp,
-      });
-    }
-
-    if (vital.temperature >= 38) {
-      generatedAlerts.push({
-        id: `${Date.now()}-fievre`,
-        level: 'warning',
-        title: '⚠️ Fièvre',
-        message: `Température élevée: ${vital.temperature.toFixed(1)}°C`,
-        timestamp: vital.timestamp,
-      });
-    }
-
-    if (vital.bloodPressureSystolic >= 140 || vital.bloodPressureDiastolic >= 90) {
-      generatedAlerts.push({
-        id: `${Date.now()}-hypertension`,
-        level: 'warning',
-        title: '⚠️ Hypertension',
-        message: `Tension élevée: ${vital.bloodPressureSystolic.toFixed(0)}/${vital.bloodPressureDiastolic.toFixed(0)} mmHg`,
-        timestamp: vital.timestamp,
-      });
-    }
-
-    if (generatedAlerts.length) {
-      setAlerts((previous) => [...generatedAlerts, ...previous].slice(0, 12));
-    }
-  }, []);
 
   const pushVitalPoint = useCallback(
     (rawPoint, synthetic = false) => {
@@ -180,11 +111,10 @@ function App() {
 
         lastPointAtRef.current = Date.now();
         setLastRefreshAt(nextPoint.timestamp);
-        checkAlerts(nextPoint);
         return [...previous, nextPoint].slice(-MAX_POINTS);
       });
     },
-    [checkAlerts]
+    []
   );
 
   const fetchStats = useCallback(async (patientId) => {
@@ -324,19 +254,11 @@ function App() {
     () =>
       vitalData.slice(-MAX_POINTS).map((vital) => ({
         time: formatTime(vital.timestamp),
-        heartRate: Number(vital.heartRate.toFixed(1)),
-        temperature: Number(vital.temperature.toFixed(2)),
-        spo2: Number(vital.oxygenSaturation.toFixed(1)),
-        systolic: Number(vital.bloodPressureSystolic.toFixed(1)),
-        diastolic: Number(vital.bloodPressureDiastolic.toFixed(1)),
+        ppgSignal: Number(vital.ppgSignal.toFixed(1)),
+        ecgSignal: Number(vital.ecgSignal.toFixed(3)),
       })),
     [vitalData]
   );
-
-  const heartStats = useMemo(() => computeMetricStats(vitalData, 'heartRate'), [vitalData]);
-  const spo2Stats = useMemo(() => computeMetricStats(vitalData, 'oxygenSaturation'), [vitalData]);
-  const temperatureStats = useMemo(() => computeMetricStats(vitalData, 'temperature'), [vitalData]);
-  const pressureStats = useMemo(() => computeBloodPressureStats(vitalData), [vitalData]);
 
   const tooltipStyle = {
     background: 'rgba(255, 255, 255, 0.95)',
@@ -345,7 +267,6 @@ function App() {
     boxShadow: '0 10px 25px rgba(77, 44, 126, 0.16)',
   };
 
-  const safeNumber = (value, decimals = 1) => (value === null ? '--' : value.toFixed(decimals));
   const currentPatientLabel = selectedPatient || 'Patient inconnu';
 
   return (
@@ -402,100 +323,29 @@ function App() {
             </div>
           </div>
 
-          <div className="alert-container">
-            {alerts.length === 0 ? (
-              <div className="no-data">✅ Aucune alerte active</div>
-            ) : (
-              alerts.slice(0, 6).map((alert) => (
-                <div key={alert.id} className={`alert alert-${alert.level}`}>
-                  <div className="alert-icon">{alert.level === 'critical' ? '🚨' : '⚠️'}</div>
-                  <div className="alert-content">
-                    <strong>{alert.title}</strong>
-                    <p>{alert.message}</p>
-                    <small>{formatTime(alert.timestamp)}</small>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="stats-grid">
-            <div className="stat-card stat-heart">
-              <div className="stat-label">❤️ Rythme cardiaque</div>
-              <div className="stat-value">
-                {safeNumber(heartStats.last, 0)}
-                <span className="stat-unit">bpm</span>
-              </div>
-              <div className="stat-details">
-                <span>Min: {safeNumber(heartStats.min, 0)}</span>
-                <span>Max: {safeNumber(heartStats.max, 0)}</span>
-                <span>Moy: {safeNumber(heartStats.avg, 0)}</span>
-              </div>
-            </div>
-
-            <div className="stat-card stat-spo2">
-              <div className="stat-label">💧 SpO2</div>
-              <div className="stat-value">
-                {safeNumber(spo2Stats.last)}
-                <span className="stat-unit">%</span>
-              </div>
-              <div className="stat-details">
-                <span>Min: {safeNumber(spo2Stats.min)}%</span>
-                <span>Max: {safeNumber(spo2Stats.max)}%</span>
-                <span>Moy: {safeNumber(spo2Stats.avg)}%</span>
-              </div>
-            </div>
-
-            <div className="stat-card stat-temp">
-              <div className="stat-label">🌡️ Température</div>
-              <div className="stat-value">
-                {safeNumber(temperatureStats.last)}
-                <span className="stat-unit">°C</span>
-              </div>
-              <div className="stat-details">
-                <span>Min: {safeNumber(temperatureStats.min)}°C</span>
-                <span>Max: {safeNumber(temperatureStats.max)}°C</span>
-                <span>Moy: {safeNumber(temperatureStats.avg)}°C</span>
-              </div>
-            </div>
-
-            <div className="stat-card stat-pressure">
-              <div className="stat-label">📊 Tension artérielle</div>
-              <div className="stat-value">
-                {safeNumber(pressureStats.systolic.last, 0)}/{safeNumber(pressureStats.diastolic.last, 0)}
-                <span className="stat-unit">mmHg</span>
-              </div>
-              <div className="stat-details">
-                <span>Min: {safeNumber(pressureStats.systolic.min, 0)}</span>
-                <span>Max: {safeNumber(pressureStats.systolic.max, 0)}</span>
-                <span>Moy: {safeNumber(pressureStats.systolic.avg, 0)}</span>
-              </div>
-            </div>
-          </div>
-
           <div className="charts-grid">
             <div className="chart-container">
               <div className="chart-header">
-                <div className="chart-icon heart-icon">❤️</div>
-                <div className="chart-title">Rythme cardiaque</div>
+                <div className="chart-icon heart-icon">🫀</div>
+                <div className="chart-title">Signal PPG (Photopléthysmogramme)</div>
               </div>
               <div className="chart-canvas">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="time" />
-                    <YAxis domain={[40, 140]} />
+                    <YAxis />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Legend />
                     <Line
                       type="monotone"
-                      dataKey="heartRate"
-                      stroke="#f5576c"
+                      dataKey="ppgSignal"
+                      stroke="#1f8ef1"
                       strokeWidth={3}
                       dot={false}
                       isAnimationActive={true}
                       animationDuration={650}
-                      name="FC (bpm)"
+                      name="PPG"
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -504,92 +354,26 @@ function App() {
 
             <div className="chart-container">
               <div className="chart-header">
-                <div className="chart-icon spo2-icon">💧</div>
-                <div className="chart-title">Saturation en Oxygène (SpO2)</div>
+                <div className="chart-icon spo2-icon">⚡</div>
+                <div className="chart-title">Signal ECG (Électrocardiogramme)</div>
               </div>
               <div className="chart-canvas">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="time" />
-                    <YAxis domain={[88, 100]} />
+                    <YAxis domain={[-1.2, 1.6]} />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Legend />
                     <Line
                       type="monotone"
-                      dataKey="spo2"
-                      stroke="#00f2fe"
+                      dataKey="ecgSignal"
+                      stroke="#ff5d73"
                       strokeWidth={3}
                       dot={false}
                       isAnimationActive={true}
                       animationDuration={650}
-                      name="SpO2 (%)"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="chart-container">
-              <div className="chart-header">
-                <div className="chart-icon temp-icon">🌡️</div>
-                <div className="chart-title">Température corporelle</div>
-              </div>
-              <div className="chart-canvas">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis domain={[35, 40]} />
-                    <Tooltip contentStyle={tooltipStyle} />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="temperature"
-                      stroke="#fee140"
-                      strokeWidth={3}
-                      dot={false}
-                      isAnimationActive={true}
-                      animationDuration={650}
-                      name="Température (°C)"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="chart-container">
-              <div className="chart-header">
-                <div className="chart-icon bp-icon">📊</div>
-                <div className="chart-title">Tension artérielle</div>
-              </div>
-              <div className="chart-canvas">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis domain={[60, 180]} />
-                    <Tooltip contentStyle={tooltipStyle} />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="systolic"
-                      stroke="#ff4f9a"
-                      strokeWidth={3}
-                      dot={false}
-                      isAnimationActive={true}
-                      animationDuration={650}
-                      name="Systolique"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="diastolic"
-                      stroke="#00d2ff"
-                      strokeWidth={3}
-                      dot={false}
-                      isAnimationActive={true}
-                      animationDuration={650}
-                      name="Diastolique"
+                      name="ECG"
                     />
                   </LineChart>
                 </ResponsiveContainer>

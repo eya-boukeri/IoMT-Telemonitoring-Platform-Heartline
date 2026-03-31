@@ -32,7 +32,7 @@ services:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: kafka-pfa-v2
     ports:
-      - "9093:9092"
+      - "9093:9093"
     command:
       - redpanda start
       - --overprovisioned
@@ -41,6 +41,8 @@ services:
       - --reserve-memory 0M
       - --node-id 0
       - --check=false
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:9093
+      - --advertise-kafka-addr internal://kafka-pfa-v2:9092,external://localhost:9093
     networks:
       - medtech-network
 
@@ -90,6 +92,8 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin123
     command: start-dev
+    volumes:
+      - keycloak-data:/opt/keycloak/data
     networks:
       - medtech-network
 
@@ -99,7 +103,7 @@ services:
     ports:
       - "9090:9090"
     environment:
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-pfa-v2:9092
       INFLUXDB_URL: http://influxdb:8086
       INFLUXDB_TOKEN: my-secret-token
       INFLUXDB_ORG: myorg
@@ -121,7 +125,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ingestion_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-pfa-v2:9092
       MQTT_BROKER_URL: tcp://mosquitto:1883
     depends_on:
       - postgres
@@ -144,15 +148,7 @@ services:
       - ingestion-service
     networks:
       - medtech-network
-    keycloak:
-    image: quay.io/keycloak/keycloak:23.0
-   
-    
-   
-    command: start-dev
-    volumes:
-      - keycloak-data:/opt/keycloak/data
-  
+
   medical-dashboard:
     build: ../medical-dashboard
     container_name: medical-dashboard-pfa
@@ -163,6 +159,22 @@ services:
     depends_on:
       - api-gateway
       - vitals-management
+    networks:
+      - medtech-network
+
+  notification-service:
+    build: ../notification-service
+    container_name: notification-service-pfa
+    ports:
+      - "9095:9095"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-pfa-v2:9092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      - kafka
+      - postgres
     networks:
       - medtech-network
 
