@@ -12,3 +12,7 @@ hs_err_pid*.log
 # Env
 .env
 *.log
+
+# Python cache
+__pycache__/
+*.py[cod]
