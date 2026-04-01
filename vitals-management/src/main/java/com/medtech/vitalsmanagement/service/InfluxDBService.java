@@ -72,14 +72,6 @@ public class InfluxDBService {
             point.addField("bloodPressureDiastolic", vitalData.getBloodPressureDiastolic());
             hasField = true;
         }
-        if (vitalData.getTemperature() != null) {
-            point.addField("temperature", vitalData.getTemperature());
-            hasField = true;
-        }
-        if (vitalData.getOxygenSaturation() != null) {
-            point.addField("oxygenSaturation", vitalData.getOxygenSaturation());
-            hasField = true;
-        }
         if (vitalData.getHeartRateMin() != null) {
             point.addField("heartRateMin", vitalData.getHeartRateMin());
             hasField = true;
@@ -267,10 +259,9 @@ public class InfluxDBService {
 
         Map<String, VitalStat> stats = new HashMap<>();
         stats.put("heartRate", calculateStats(history.stream().map(VitalData::getHeartRate).toList()));
-        stats.put("bloodPressureSystolic", calculateStats(history.stream().map(VitalData::getBloodPressureSystolic).toList()));
-        stats.put("bloodPressureDiastolic", calculateStats(history.stream().map(VitalData::getBloodPressureDiastolic).toList()));
-        stats.put("temperature", calculateStats(history.stream().map(VitalData::getTemperature).toList()));
-        stats.put("oxygenSaturation", calculateStats(history.stream().map(VitalData::getOxygenSaturation).toList()));
+        stats.put("ppgGreenAverage", calculateStats(history.stream().map(VitalData::getPpgGreenAverage).toList()));
+        stats.put("ppgRedAverage", calculateStats(history.stream().map(VitalData::getPpgRedAverage).toList()));
+        stats.put("accelerometerMagnitudeAverage", calculateStats(history.stream().map(VitalData::getAccelerometerMagnitudeAverage).toList()));
 
         return new VitalStatsResponse(patientId, safeStart, safeEnd, stats);
     }
@@ -338,9 +329,6 @@ public class InfluxDBService {
         data.setHeartRate(toDouble(record.getValueByKey("heartRate")));
         data.setBloodPressureSystolic(toDouble(record.getValueByKey("bloodPressureSystolic")));
         data.setBloodPressureDiastolic(toDouble(record.getValueByKey("bloodPressureDiastolic")));
-        data.setTemperature(toDouble(record.getValueByKey("temperature")));
-        data.setOxygenSaturation(toDouble(record.getValueByKey("oxygenSaturation")));
-
         return data;
     }
 
@@ -352,7 +340,7 @@ public class InfluxDBService {
             return number.doubleValue();
         }
         try {
-            return Double.parseDouble(String.valueOf(value));
+            return Double.parseDouble(value.toString());
         } catch (NumberFormatException ex) {
             return null;
         }

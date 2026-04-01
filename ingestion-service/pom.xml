@@ -101,6 +101,8 @@
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
+
+            <!-- PostgreSQL & JPA -->
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <excludes>

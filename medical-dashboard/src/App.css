@@ -286,14 +286,6 @@
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
 }
 
-.stat-spo2 {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-.stat-temp {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
 .stat-pressure {
   background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
   color: #1f2937;
@@ -331,18 +323,6 @@
 
 .heart-icon {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.spo2-icon {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-.temp-icon {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-.bp-icon {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
 }
 
 .chart-title {

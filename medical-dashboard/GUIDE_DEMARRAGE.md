@@ -36,8 +36,8 @@ Le dashboard sera accessible sur **http://localhost:5173**
 - **Sélection de patient** : Choisir le patient à surveiller
 - **Graphiques interactifs** :
   - Rythme cardiaque (bpm)
-  - Température corporelle (°C)
-  - Saturation en oxygène SpO₂ (%)
+  - Signal PPG (morphologie)
+  - Activité accéléromètre (niveau de mouvement)
   - Tension artérielle (systolique/diastolique)
 
 ### Statistiques
@@ -46,8 +46,8 @@ Le dashboard sera accessible sur **http://localhost:5173**
 
 ### Alertes Automatiques
 - ⚠️ Rythme cardiaque anormal (< 60 ou > 100 bpm)
-- ⚠️ Température anormale (< 36 ou > 38°C)
-- ⚠️ SpO₂ bas (< 95%)
+- ⚠️ Qualité de signal faible (PPG bruité)
+- ⚠️ Mouvement excessif détecté (accéléromètre)
 - ⚠️ Tension artérielle hors limites
 
 ## 🔌 API Backend Disponibles
@@ -109,8 +109,8 @@ L'application Android doit envoyer les données au format suivant sur le topic `
   "patientId": "PATIENT001",
   "timestamp": "2026-03-05T22:30:00Z",
   "heartRate": 75.5,
-  "temperature": 36.8,
-  "oxygenSaturation": 98.5,
+  "ppgGreenAverage": 1200.3,
+  "accelerometerMagnitudeAverage": 0.84,
   "bloodPressureSystolic": 120,
   "bloodPressureDiastolic": 80
 }

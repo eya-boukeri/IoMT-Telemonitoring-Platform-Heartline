@@ -31,5 +31,12 @@ public class FilteredSignal {
         private double min;
         private double max;
         private int originalLength;
+        private double motionMean;
+        private double motionMax;
+        private double motionThreshold;
+        private double motionRatio;
+        private int removedSamples;
+        private int corruptedSegments;
+        private int cleanedSamples;
     }
 }

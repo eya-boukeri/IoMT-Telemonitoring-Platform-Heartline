@@ -27,7 +27,7 @@ public class AggregationService {
     private static final long WINDOW_SECONDS = 30;
 
     private final KafkaProducerService kafkaProducerService;
-    private final IngestionMetricsService ingestionMetricsService;
+    private final IngestionInfluxService ingestionInfluxService;
 
     private final Map<String, BufferWindow> bufferByWindow = new ConcurrentHashMap<>();
     private final AtomicLong emittedWindowCount = new AtomicLong(0);
@@ -218,7 +218,7 @@ public class AggregationService {
         metrics.setValidSamples(aggregatedData.getValidSamples());
         metrics.setOutlierSamples(aggregatedData.getOutlierSamples());
 
-        ingestionMetricsService.save(metrics, rrIntervalsMs);
+        ingestionInfluxService.save(metrics, rrIntervalsMs);
     }
 
     private HeartRateEstimation estimateHeartRate(List<Double> ppg, Instant windowStart, Instant windowEnd) {

@@ -127,10 +127,15 @@ services:
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-pfa-v2:9092
       MQTT_BROKER_URL: tcp://mosquitto:1883
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: my-secret-token
+      INFLUXDB_ORG: myorg
+      INFLUXDB_BUCKET: medical_data
     depends_on:
       - postgres
       - kafka
       - mosquitto
+      - influxdb
     networks:
       - medtech-network
 

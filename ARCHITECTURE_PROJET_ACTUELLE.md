@@ -101,7 +101,7 @@ Fichier: `vitals-management/src/main/resources/application.properties`
 - charge historique + stats,
 - ouvre une connexion SSE par patient,
 - maintient une fenetre de donnees recente (jusqu a 50 points),
-- calcule des alertes UI (FC, temperature, SpO2, tension).
+- calcule des alertes UI (FC, qualite PPG, mouvement, tension).
 
 #### Proxy et reseau
 Fichier: `medical-dashboard/vite.config.js`
@@ -119,7 +119,7 @@ Modele: `vitals-management/src/main/java/com/medtech/vitalsmanagement/model/Obse
 
 ### 4.2 Modele interne/normalise (VitalData)
 Modele: `vitals-management/src/main/java/com/medtech/vitalsmanagement/model/VitalData.java`
-- mesures principales: `heartRate`, `temperature`, `oxygenSaturation`, `bloodPressure...`
+- mesures principales: `heartRate`, `bloodPressure...`, metriques PPG/ACC
 - metriques enrichies:
   - HRV (`heartRateMin`, `heartRateMax`, `heartRateVariability`, `detectedPeaks`),
   - statistiques PPG (`ppgGreen*`, `ppgRed*`, `ppgDataPoints`),
@@ -130,7 +130,7 @@ Modele: `vitals-management/src/main/java/com/medtech/vitalsmanagement/model/Vita
 1. Parse MQTT payload en `ObservationData` (si possible), sinon `VitalData`.
 2. Si ObservationData:
    - extraction fenetre temporelle,
-   - traitement PPG (stats + estimation HR/HRV + SpO2),
+  - traitement PPG (stats + estimation HR/HRV),
    - traitement accelerometre (magnitude, variance),
    - scoring qualite signal.
 3. Validation minimale (presence `patientId`, dedup selon timestamp/patient).

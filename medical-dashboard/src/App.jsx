@@ -5,12 +5,13 @@ import './App.css';
 const API_ROOT = import.meta.env.REACT_APP_API_URL || '/api';
 const API_BASE_URL = `${API_ROOT}/vitals`;
 const SSE_BASE_URL = API_BASE_URL;
+const NOTIFICATION_SSE_BASE_URL = `${API_ROOT}/notifications`;
 const MAX_POINTS = 50;
 const AUTO_UPDATE_MS = 3000;
+const MAX_ALERTS = 8;
 
 const DEFAULT_METRICS = {
   ppgSignal: 1250,
-  ecgSignal: 0,
 };
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -22,22 +23,6 @@ const toNumber = (value) => {
 };
 
 const randomFloat = (min, max) => Math.random() * (max - min) + min;
-
-const toTimestampMs = (timestamp) => {
-  const value = Date.parse(timestamp || '');
-  return Number.isFinite(value) ? value : Date.now();
-};
-
-const buildSyntheticEcg = (timestamp, ppgSignal) => {
-  const t = toTimestampMs(timestamp) / 1000;
-  const beat = t % 0.85;
-  const pWave = Math.exp(-Math.pow((beat - 0.16) / 0.04, 2)) * 0.14;
-  const qrs = Math.exp(-Math.pow((beat - 0.25) / 0.015, 2)) * 1.15;
-  const tWave = Math.exp(-Math.pow((beat - 0.46) / 0.08, 2)) * 0.28;
-  const baseline = Math.sin(t * 2 * Math.PI * 0.4) * 0.03;
-  const modulation = Number.isFinite(ppgSignal) ? ((ppgSignal % 250) / 250 - 0.5) * 0.04 : 0;
-  return baseline + pWave + qrs + tWave + modulation - 0.06;
-};
 
 const buildVitalPoint = (raw, previousPoint) => {
   const previous = previousPoint || DEFAULT_METRICS;
@@ -55,16 +40,9 @@ const buildVitalPoint = (raw, previousPoint) => {
     6000
   );
 
-  const ecgSignal = clamp(
-    toNumber(base.ecgSignal) ?? toNumber(base.ecg) ?? buildSyntheticEcg(timestamp, ppgSignal),
-    -2,
-    2
-  );
-
   return {
     timestamp,
     ppgSignal,
-    ecgSignal,
   };
 };
 
@@ -72,12 +50,10 @@ const evolveVitalPoint = (previousPoint) => {
   const prev = previousPoint || DEFAULT_METRICS;
   const timestamp = new Date().toISOString();
   const ppgSignal = clamp((prev.ppgSignal || DEFAULT_METRICS.ppgSignal) + randomFloat(-45, 45), 700, 3200);
-  const ecgSignal = clamp(buildSyntheticEcg(timestamp, ppgSignal) + randomFloat(-0.03, 0.03), -2, 2);
 
   return {
     timestamp,
     ppgSignal,
-    ecgSignal,
   };
 };
 
@@ -94,10 +70,31 @@ function App() {
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [vitalData, setVitalData] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState(null);
   const eventSourceRef = useRef(null);
+  const notificationEventSourceRef = useRef(null);
   const lastPointAtRef = useRef(0);
+
+  const pushAlert = useCallback((rawAlert) => {
+    if (!rawAlert || typeof rawAlert !== 'object') {
+      return;
+    }
+
+    const normalized = {
+      id: rawAlert.alertId || `${Date.now()}-${Math.random()}`,
+      alertType: rawAlert.alertType || 'notification',
+      message: rawAlert.message || 'Nouvelle alerte reçue',
+      severity: String(rawAlert.severity || 'WARNING').toUpperCase(),
+      timestamp: rawAlert.timestamp || new Date().toISOString(),
+    };
+
+    setAlerts((previous) => {
+      const withoutDuplicate = previous.filter((item) => item.id !== normalized.id);
+      return [normalized, ...withoutDuplicate].slice(0, MAX_ALERTS);
+    });
+  }, []);
 
   const pushVitalPoint = useCallback(
     (rawPoint, synthetic = false) => {
@@ -229,6 +226,40 @@ function App() {
     };
   }, [selectedPatient, fetchLatestBatch, fetchStats, pushVitalPoint]);
 
+  useEffect(() => {
+    if (!selectedPatient) {
+      return;
+    }
+
+    if (notificationEventSourceRef.current) {
+      notificationEventSourceRef.current.close();
+    }
+
+    const notificationEventSource = new EventSource(
+      `${NOTIFICATION_SSE_BASE_URL}/stream/${selectedPatient}`
+    );
+    notificationEventSourceRef.current = notificationEventSource;
+
+    notificationEventSource.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        pushAlert(parsed);
+      } catch (_error) {
+        // Ignore non-JSON housekeeping events.
+      }
+    };
+
+    notificationEventSource.onerror = () => {
+      // Notification stream may be transient; keep vitals stream independent.
+    };
+
+    return () => {
+      if (notificationEventSource) {
+        notificationEventSource.close();
+      }
+    };
+  }, [selectedPatient, pushAlert]);
+
   // Rafraîchissement auto toutes les 3 secondes
   useEffect(() => {
     if (!selectedPatient) return;
@@ -255,7 +286,6 @@ function App() {
       vitalData.slice(-MAX_POINTS).map((vital) => ({
         time: formatTime(vital.timestamp),
         ppgSignal: Number(vital.ppgSignal.toFixed(1)),
-        ecgSignal: Number(vital.ecgSignal.toFixed(3)),
       })),
     [vitalData]
   );
@@ -323,6 +353,27 @@ function App() {
             </div>
           </div>
 
+          {alerts.length > 0 && (
+            <div className="alert-container">
+              {alerts.map((alert) => {
+                const isCritical = alert.severity === 'CRITICAL';
+                return (
+                  <div
+                    key={alert.id}
+                    className={`alert ${isCritical ? 'alert-critical' : 'alert-warning'}`}
+                  >
+                    <div className="alert-icon">{isCritical ? '🚨' : '⚠️'}</div>
+                    <div className="alert-content">
+                      <strong>{alert.alertType}</strong>
+                      <p>{alert.message}</p>
+                      <small>{formatTime(alert.timestamp)}</small>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="charts-grid">
             <div className="chart-container">
               <div className="chart-header">
@@ -346,34 +397,6 @@ function App() {
                       isAnimationActive={true}
                       animationDuration={650}
                       name="PPG"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="chart-container">
-              <div className="chart-header">
-                <div className="chart-icon spo2-icon">⚡</div>
-                <div className="chart-title">Signal ECG (Électrocardiogramme)</div>
-              </div>
-              <div className="chart-canvas">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis domain={[-1.2, 1.6]} />
-                    <Tooltip contentStyle={tooltipStyle} />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="ecgSignal"
-                      stroke="#ff5d73"
-                      strokeWidth={3}
-                      dot={false}
-                      isAnimationActive={true}
-                      animationDuration={650}
-                      name="ECG"
                     />
                   </LineChart>
                 </ResponsiveContainer>

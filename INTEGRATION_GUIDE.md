@@ -142,7 +142,6 @@ Le backend accepte désormais **2 formats ObservationData** pour compatibilité:
   "heartRateVariability": 4.2,
   "detectedPeaks": 361,
   
-  "oxygenSaturation": 98.0,
   
   "ppgGreenMin": 890.2,
   "ppgGreenMax": 1456.8,
@@ -160,8 +159,7 @@ Le backend accepte désormais **2 formats ObservationData** pour compatibilité:
   "signalQuality": "excellent",
   "signalQualityScore": 95.5,
   
-  "bloodPressure": null,
-  "temperature": null
+   "bloodPressure": null
 }
 ```
 
@@ -187,7 +185,6 @@ Le backend `vitals-management` implémente une conversion optimisée des donnée
    - Extraction statistiques brutes (min/max/moyenne par canal)
    - Détection de pics améliorée (seuil adaptatif)
    - Calcul HRV (Heart Rate Variability) à partir des intervalles
-   - Estimation SpO2 avec filtrage des outliers
 5. **Traitement Accéléromètre** (voir `processAccelerometerData()`):
    - Calcul magnitude: sqrt(x² + y² + z²)
    - Analyse d'activité (variabilité des mouvements)
@@ -206,13 +203,11 @@ Le backend `vitals-management` implémente une conversion optimisée des donnée
 - Fallback Android: valeur timestamp utilisée comme canal principal
 - Statistiques: min, max, moyenne par canal
 - Appel `calculateHeartRateWithVariability()` pour HR/HRV
-- Appel `estimateSpO2FromPPG()` pour SpO2
 
 **Sortie**: VitalData enrichie avec:
 ```
 heartRate, heartRateMin, heartRateMax, heartRateVariability, detectedPeaks
 ppgGreenMin/Max/Average, ppgRedMin/Max/Average, ppgDataPoints
-oxygenSaturation
 ```
 
 #### `processAccelerometerData()` - Analyse d'Activité
@@ -247,26 +242,12 @@ averageHeartRate, minHeartRate, maxHeartRate
 variability (écart-type en BPM), peakCount
 ```
 
-#### `estimateSpO2FromPPG()` - Ratio-of-Ratios Amélioré
-**Algorithme**:
-```
-1. Filtrage outliers: ±2σ de la moyenne (évite données aberrantes)
-2. Moyenne filtrée des canaux vert et rouge
-3. Ratio = greenFiltered / redFiltered
-4. SpO2 = 110 - (25 × ratio)
-5. Validation:
-   - 95-100% → retourner valeur
-   - 85-95% → retourner + avertissement (faible saturé)
-   - <85% ou >100% → retourner default 98%
-```
-
 #### `assessSignalQuality()` q
 **Critères d'évaluation** (base 100):
 - PPG datapoints < 100 → -20 (données insuffisantes)
 - PPG range (max-min) < 100 → -15 (signal faible)
 - HR hors 40-200 bpm → -30 (invalide)
 - HRV > 30 bpm → -10 (très variable)
-- SpO2 hors 85-100% → -25 (invalide)
 
 **Score Final**:
 ```
@@ -334,11 +315,11 @@ private const val MQTT_BROKER = "tcp://192.168.1.100:1885"
 ```
 📡 MQTT message received - Topic: health/sensorData, payload_size=2847
 📊 Parsed as ObservationData (smartwatch format), converting to VitalData
-📊 PPG Processed: 6000 datapoints, HR=72.5 bpm (±4.2), SpO2=98.0%
+📊 PPG Processed: 6000 datapoints, HR=72.5 bpm (±4.2)
 🏃 Activity Detected: avg=0.85, max=2.15, variance=0.42
 📈 Signal Quality: excellent (score=95.5%)
-✅ Converted ObservationData to VitalData - patientId=patient-001, HR=72.5 (range: 68.0-78.5), SpO2=98.0, activity=0.85
-💾 InfluxDB: Patient patient-001 - HR=72.5 Temp=null SpO2=98.0 @ 2025-02-01T15:30:00Z
+✅ Converted ObservationData to VitalData - patientId=patient-001, HR=72.5 (range: 68.0-78.5), activity=0.85
+💾 InfluxDB: Patient patient-001 - HR=72.5 @ 2025-02-01T15:30:00Z
 ✉️  Kafka published - patient=patient-001 partition=0 offset=123
 ```
 
@@ -388,7 +369,6 @@ SELECT * FROM vitals ORDER BY time DESC LIMIT 10
    - Nouvelle méthode `processAccelerometerData()` pour analyse d'activité
    - Ajout parsing datetime tolérant (`LocalDateTime` et `Instant`)
    - Nouvelle méthode `calculateHeartRateWithVariability()` avec seuil adaptatif
-   - Nouvelle méthode `estimateSpO2FromPPG()` avec filtrage outliers
    - Nouvelle méthode `assessSignalQuality()` pour scoring qualité signal
    - Nouvelle classe interne `HeartRateAnalysis` pour encapsuler résultats HR/HRV
 
@@ -456,18 +436,18 @@ SELECT * FROM vitals ORDER BY time DESC LIMIT 10
 ✅ **Heart Rate Variability (HRV)** - Calcul complet avec min/max/écart-type  
 ✅ **Statistiques PPG Complètes** - Extraction min/max/moyenne par canal  
 ✅ **Analyse d'Activité** - À partir des données accéléromètre  
-✅ **Filtrage des Outliers** - Pour SpO2 estimation (±2σ)  
+✅ **Filtrage des Outliers** - Pour robustesse PPG (±2σ)  
 ✅ **Évaluation Qualité Signal** - Score et classification automatique  
 ✅ **Préservation Fenêtre Temporelle** - startTime/endTime/duration  
 
 ## Améliorations Futures
 
 1. **Algorithme FFT** pour analyse fréquentielle plus avancée des PPG
-2. **Machine Learning** pour estimation SpO2 calibrée par patient
+2. **Machine Learning** pour détection avancée d'artefacts PPG/ACC
 3. **Détection d'Arythmies** basée sur HRV patterns
 4. **Agrégation Temporelle Intelligente** pour réduire volume données (downsampling adaptatif)
 5. **Notifications en Temps Réel** via WebSocket pour le dashboard
-6. **Support Multi-Capteurs** (température, pression artérielle) si disponibles sur smartwatch
+6. **Support Multi-Capteurs** (PPG multi-canaux, accéléromètre avancé) si disponibles sur smartwatch
 7. **Persistance Données Brutes** option - stockage PPG/accéléro pour analyse future
 
 ## Références

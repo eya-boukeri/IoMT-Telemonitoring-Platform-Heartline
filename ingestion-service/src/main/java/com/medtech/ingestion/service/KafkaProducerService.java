@@ -13,6 +13,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import com.medtech.ingestion.model.AggregatedData;
+import com.medtech.ingestion.model.Alert;
 import com.medtech.ingestion.model.FilteredSignal;
 import com.medtech.ingestion.model.RawSignal;
 
@@ -38,6 +39,9 @@ public class KafkaProducerService {
     @Value("${kafka.topic.aggregated:signals.aggregated}")
     private String aggregatedTopic;
 
+    @Value("${kafka.topic.alerts:medical-alerts}")
+    private String alertsTopic;
+
     private final AtomicLong publishedCount = new AtomicLong(0);
     private volatile Instant lastPublishedAt;
 
@@ -51,6 +55,10 @@ public class KafkaProducerService {
 
     public boolean publishAggregatedData(AggregatedData aggregatedData) {
         return publish(aggregatedTopic, aggregatedData.getPatientId(), aggregatedData);
+    }
+
+    public boolean publishAlert(Alert alert) {
+        return publish(alertsTopic, alert.getPatientId(), alert);
     }
 
     public long getPublishedCount() {

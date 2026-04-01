@@ -239,10 +239,7 @@ public class MqttConfig {
                 if (savedToInflux) {
                     log.warn("💾 ✅ SUCCESS: Données sauvegardées dans InfluxDB");
                     log.warn("   Patient: {}", vitalData.getPatientId());
-                    log.warn("   HR: {} bpm, Temp: {}°C, SpO2: {}%", 
-                        vitalData.getHeartRate(),
-                        vitalData.getTemperature(),
-                        vitalData.getOxygenSaturation());
+                    log.warn("   HR: {} bpm", vitalData.getHeartRate());
 
                     publishToKafka(vitalData);
                 } else {
@@ -347,14 +344,13 @@ public class MqttConfig {
         }
         
         // Assess overall signal quality based on data completeness
-        assessSignalQuality(vitalData, observationData);
+        assessSignalQuality(vitalData);
 
-        log.debug("✅ Converted ObservationData to VitalData - patientId={}, HR={} (range: {}-{}), SpO2={}, activity={}", 
+        log.debug("✅ Converted ObservationData to VitalData - patientId={}, HR={} (range: {}-{}), activity={}", 
             vitalData.getPatientId(), 
             vitalData.getHeartRate(),
             vitalData.getHeartRateMin(),
             vitalData.getHeartRateMax(),
-            vitalData.getOxygenSaturation(),
             vitalData.getAccelerometerMagnitudeAverage());
 
         return vitalData;
@@ -434,13 +430,8 @@ public class MqttConfig {
         vitalData.setHeartRateVariability(hrAnalysis.variability);
         vitalData.setDetectedPeaks(hrAnalysis.peakCount);
         
-        // Estimate SpO2 from green/red PPG ratio
-        Double estimatedSpO2 = estimateSpO2FromPPG(greenValues, redValues);
-        vitalData.setOxygenSaturation(estimatedSpO2);
-        
-        log.debug("📊 PPG Processed: {} datapoints, HR={} bpm (±{}), SpO2={}%",
-            greenValues.size(), vitalData.getHeartRate(), vitalData.getHeartRateVariability(), 
-            vitalData.getOxygenSaturation());
+        log.debug("📊 PPG Processed: {} datapoints, HR={} bpm (±{})",
+            greenValues.size(), vitalData.getHeartRate(), vitalData.getHeartRateVariability());
     }
 
     /**
@@ -508,11 +499,12 @@ public class MqttConfig {
     /**
      * Assess overall signal quality based on data completeness and consistency
      */
-    private void assessSignalQuality(VitalData vitalData, ObservationData observationData) {
+    private void assessSignalQuality(VitalData vitalData) {
         double qualityScore = 100.0;
         
         // Check data point count
-        int ppgPoints = vitalData.getPpgDataPoints() != null ? vitalData.getPpgDataPoints() : 0;
+        Integer ppgPointsValue = vitalData.getPpgDataPoints();
+        int ppgPoints = ppgPointsValue != null ? ppgPointsValue.intValue() : 0;
         if (ppgPoints < 100) qualityScore -= 20; // insufficient data
         
         // Check PPG signal stability
@@ -531,13 +523,6 @@ public class MqttConfig {
         // Check HRV (higher variability = less stable)
         if (vitalData.getHeartRateVariability() != null && vitalData.getHeartRateVariability() > 30) {
             qualityScore -= 10; // high variability
-        }
-        
-        // Check SpO2 validity
-        if (vitalData.getOxygenSaturation() != null) {
-            if (vitalData.getOxygenSaturation() < 85 || vitalData.getOxygenSaturation() > 100) {
-                qualityScore -= 25; // invalid SpO2
-            }
         }
         
         qualityScore = Math.max(0, Math.min(100, qualityScore));
@@ -661,7 +646,7 @@ public class MqttConfig {
         }
 
         try {
-            return Double.parseDouble(String.valueOf(value));
+            return Double.parseDouble(value.toString());
         } catch (NumberFormatException ex) {
             return null;
         }
@@ -684,52 +669,6 @@ public class MqttConfig {
 
         log.warn("⚠️ Unable to parse datetime value: {}", value);
         return null;
-    }
-
-    private Double estimateSpO2FromPPG(List<Double> greenValues, List<Double> redValues) {
-        // SpO2 estimation requires both red and IR wavelengths
-        // Improved ratio-of-ratios method with better statistics
-        if (greenValues.isEmpty() || redValues.isEmpty()) {
-            log.debug("⚠️ Insufficient PPG data for SpO2 estimation");
-            return 98.0; // Default to typical healthy value
-        }
-
-        // Calculate statistics for better filtering
-        double greenAvg = greenValues.stream().mapToDouble(v -> v).average().orElse(0.0);
-        double greenStdDev = Math.sqrt(greenValues.stream()
-            .mapToDouble(v -> Math.pow(v - greenAvg, 2))
-            .average().orElse(0.0));
-        
-        double redAvg = redValues.stream().mapToDouble(v -> v).average().orElse(0.0);
-        double redStdDev = Math.sqrt(redValues.stream()
-            .mapToDouble(v -> Math.pow(v - redAvg, 2))
-            .average().orElse(0.0));
-        
-        // Filter outliers before calculation (±2 std dev)
-        double greenFiltered = greenValues.stream()
-            .filter(v -> Math.abs(v - greenAvg) <= 2 * greenStdDev)
-            .mapToDouble(v -> v).average().orElse(greenAvg);
-        
-        double redFiltered = redValues.stream()
-            .filter(v -> Math.abs(v - redAvg) <= 2 * redStdDev)
-            .mapToDouble(v -> v).average().orElse(redAvg);
-        
-        if (redFiltered > 0) {
-            // Improved SpO2 estimation using better calibration
-            double ratio = greenFiltered / redFiltered;
-            double estimatedSpO2 = 110.0 - (25.0 * ratio);
-            
-            // Sanity check: typical SpO2 is 95-100% for healthy individuals
-            if (estimatedSpO2 >= 85 && estimatedSpO2 <= 100) {
-                return Math.round(estimatedSpO2 * 10.0) / 10.0;
-            } else if (estimatedSpO2 < 85) {
-                log.warn("⚠️ Low SpO2 estimate: {}% - Signal may be poor", estimatedSpO2);
-                return Math.round(estimatedSpO2 * 10.0) / 10.0; // Return as-is for low values
-            }
-        }
-
-        log.debug("⚠️ Could not estimate SpO2 from PPG data ratio, using default");
-        return 98.0; // Default to typical healthy value
     }
 
     /**

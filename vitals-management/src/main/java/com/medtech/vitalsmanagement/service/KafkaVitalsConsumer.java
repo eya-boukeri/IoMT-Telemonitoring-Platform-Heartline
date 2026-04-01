@@ -44,10 +44,9 @@ public class KafkaVitalsConsumer {
             // Broadcast to all connected SSE clients for this patient
             vitalStreamService.broadcastVital(vital);
             
-            log.info("🔄 Vital data pushed to SSE clients - Patient: {}, HR: {}, Temp: {}",
+            log.info("🔄 Vital data pushed to SSE clients - Patient: {}, HR: {}",
                 vital.getPatientId(),
-                vital.getHeartRate(),
-                vital.getTemperature());
+                vital.getHeartRate());
 
         } catch (Exception e) {
             log.error("❌ Error processing Kafka vital event: {}", message, e);

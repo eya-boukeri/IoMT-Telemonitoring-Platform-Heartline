@@ -106,7 +106,7 @@ docker exec -it mosquitto-pfa mosquitto_pub \
 
 💾 ✅ SUCCESS: Données sauvegardées dans InfluxDB
    Patient: test-android-123
-   HR: XX bpm, Temp: XX°C, SpO2: XX%
+  HR: XX bpm, PPG: actif, ACC: actif
 ```
 
 ---
@@ -149,7 +149,7 @@ cd C:\Users\Admin\Desktop\platformeIOT\vitals-management
 # Dans un terminal séparé
 docker exec -it mosquitto-pfa mosquitto_pub \
   -h localhost -p 1883 -t "health/sensorData" -q 2 -r \
-  -m '{"patientId":"test123","heartRate":75,"oxygenSaturation":98}'
+  -m '{"patientId":"test123","heartRate":75,"ppgGreenAverage":1200,"accelerometerMagnitudeAverage":0.85}'
 
 # Vérifiez les logs du Backend:
 # ✅ "MESSAGE MQTT REÇU!"
@@ -251,7 +251,7 @@ ports:
 📨 ✅ MESSAGE MQTT REÇU!
 💾 ✅ SUCCESS: Données sauvegardées dans InfluxDB
    Patient: patient123
-   HR: 75 bpm, Temp: 36.8°C, SpO2: 98%
+  HR: 75 bpm, PPG: 1200, ACC: 0.85
 ```
 
 Si vous voyez ces logs → ✅ **L'architecture MQTT fonctionne correctement!**

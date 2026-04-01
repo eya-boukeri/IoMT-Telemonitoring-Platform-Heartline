@@ -1,24 +1,19 @@
-package com.medtech.notification.model;
+package com.medtech.ingestion.model;
 
 import java.time.Instant;
-
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.medtech.notification.model.enums.Priority;
-import com.medtech.notification.model.enums.Severity;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-@JsonIgnoreProperties(ignoreUnknown = true)
 public class Alert {
     private String alertId;
     private String patientId;
     private String patientName;
     private String alertType;
-    private Severity severity;
-    private Priority priority;
+    private String severity;
+    private String priority;
     private Instant timestamp;
     private String message;
     private Double detectionScore;

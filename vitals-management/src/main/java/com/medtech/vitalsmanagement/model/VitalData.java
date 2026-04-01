@@ -25,8 +25,6 @@ public class VitalData {
     private Double heartRate; // bpm (primary value)
     private Double bloodPressureSystolic; // mmHg
     private Double bloodPressureDiastolic; // mmHg
-    private Double temperature; // Celsius
-    private Double oxygenSaturation; // %
     
     // === HEART RATE VARIABILITY (HRV) - preserved from time-series ===
     @JsonInclude(JsonInclude.Include.NON_NULL)
