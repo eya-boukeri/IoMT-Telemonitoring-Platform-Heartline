@@ -38,6 +38,10 @@ public class RecipientService {
         return recipients;
     }
 
+    public String getDefaultEmergencyPhone() {
+        return defaultEmergencyPhone;
+    }
+
     private List<NotificationRecipient> getDefaultRecipients(String patientId) {
         List<NotificationRecipient> defaults = new ArrayList<>();
         

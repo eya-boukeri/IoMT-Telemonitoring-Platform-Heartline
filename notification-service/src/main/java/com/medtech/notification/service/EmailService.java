@@ -25,6 +25,15 @@ public class EmailService {
 
     @Async
     public void sendAlertEmail(Alert alert, NotificationRecipient recipient) {
+        if (!hasText(fromEmail)) {
+            log.warn("Email channel disabled: spring.mail.username is empty");
+            return;
+        }
+
+        if (recipient == null || !hasText(recipient.getEmail())) {
+            return;
+        }
+
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -37,6 +46,10 @@ public class EmailService {
         } catch (Exception e) {
             log.error("❌ Email failed: {}", e.getMessage());
         }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private String buildEmailContent(Alert alert) {
