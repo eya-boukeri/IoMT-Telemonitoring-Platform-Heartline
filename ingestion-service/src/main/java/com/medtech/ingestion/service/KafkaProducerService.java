@@ -70,9 +70,13 @@ public class KafkaProducerService {
     }
 
     private boolean publish(String topic, String key, Object payload) {
+        // Vérification explicite des nulls avant envoi
+        String safeKey = (key != null) ? key : "unknown";
+        Object safePayload = (payload != null) ? payload : "{}";
+
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                var result = kafkaTemplate.send(topic, key, payload)
+                var result = kafkaTemplate.send(topic, safeKey, safePayload)
                     .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
                 publishedCount.incrementAndGet();

@@ -30,21 +30,34 @@ public class EmailService {
             return;
         }
 
-        if (recipient == null || !hasText(recipient.getEmail())) {
+        if (alert == null) {
+            log.warn("Email not sent: alert payload is null");
             return;
         }
+
+        if (recipient == null || !hasText(recipient.getEmail())) {
+            log.warn("Email not sent: recipient email is missing or invalid");
+            return;
+        }
+
+        String safeTo      = recipient.getEmail().trim();
+        String safeFrom    = hasText(fromEmail) ? fromEmail.trim() : "noreply@medtech.tn";
+        String safeSubject = String.format("[%s] Alerte: %s", 
+                alert.getSeverity() != null ? alert.getSeverity() : "INCONNUE",
+                alert.getAlertType() != null ? alert.getAlertType() : "Médicale");
+        String safeBody    = buildEmailContent(alert);
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(fromEmail);
-            helper.setTo(recipient.getEmail());
-            helper.setSubject(String.format("[%s] Alerte: %s", alert.getSeverity(), alert.getAlertType()));
-            helper.setText(buildEmailContent(alert), true);
+            helper.setFrom(safeFrom);
+            helper.setTo(safeTo);
+            helper.setSubject(safeSubject);
+            helper.setText(safeBody, true);
             mailSender.send(message);
-            log.info("📧 Email sent to {}", recipient.getEmail());
+            log.info("📧 Email sent to {}", safeTo);
         } catch (Exception e) {
-            log.error("❌ Email failed: {}", e.getMessage());
+            log.error("❌ Email failed sending to {}", safeTo, e);
         }
     }
 
@@ -53,6 +66,7 @@ public class EmailService {
     }
 
     private String buildEmailContent(Alert alert) {
+        // Les champs peuvent être null, String.format les convertit en "null" – acceptable
         return String.format("""
             <h2>🚨 Alerte Médicale</h2>
             <p><strong>Patient:</strong> %s</p>

@@ -2,13 +2,10 @@ services:
   mosquitto:
     image: eclipse-mosquitto:latest
     container_name: mosquitto-pfa-v2
-    ports:
-      - "1885:1883"
-      - "9002:9001"
+    network_mode: host                     # ← remplace ports et networks
     volumes:
       - ./mosquitto/config:/mosquitto/config
-    networks:
-      - medtech-network
+    # Supprimez ou commentez les lignes "ports" et "networks"
 
   influxdb:
     image: influxdb:2.7
@@ -91,12 +88,24 @@ services:
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin123
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8180
+      KC_HTTP_ENABLED: "true"
+      # Connexion PostgreSQL
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
     command: start-dev
     volumes:
-      - keycloak-data:/opt/keycloak/data
+      # Dossier d'import JSON (à créer plus tard)
+      - ./keycloak/import:/opt/keycloak/data/import:ro
+    depends_on:
+      - postgres
     networks:
       - medtech-network
-
+    
+    
   vitals-management:
     build: ../vitals-management
     container_name: vitals-management-pfa
@@ -141,18 +150,28 @@ services:
 
   api-gateway:
     build: ../api-gateway
-    container_name: api-gateway-pfa
+    container_name: api-gateway
     ports:
       - "8080:8080"
     environment:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/iot-sante
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/iot-sante/protocol/openid-connect/certs
+      SPRING_R2DBC_URL: r2dbc:postgresql://postgres:5432/ingestion_db
+      SPRING_R2DBC_USERNAME: postgres
+      SPRING_R2DBC_PASSWORD: postgres
     depends_on:
       - keycloak
+      - postgres
       - vitals-management
       - ingestion-service
     networks:
       - medtech-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   medical-dashboard:
     build: ../medical-dashboard

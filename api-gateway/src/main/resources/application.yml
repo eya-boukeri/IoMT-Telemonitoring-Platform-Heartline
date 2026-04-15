@@ -5,63 +5,106 @@ spring:
   application:
     name: api-gateway
 
+  # ── Base de données R2DBC (reactive) ─────────────────────────────────────────
+  r2dbc:
+    url: r2dbc:postgresql://postgres:5432/ingestion_db
+    username: postgres
+    password: postgres
+
+  # ── Sécurité OAuth2 Keycloak ─────────────────────────────────────────────────
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://keycloak:8080/realms/iot-sante
-          jwk-set-uri: http://keycloak:8080/realms/iot-sante/protocol/openid-connect/certs
+          # jwk-set-uri direct → evite conflit localhost:8180 vs keycloak:8080
+          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://keycloak:8080/realms/iot-sante}
+          jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:http://keycloak:8080/realms/iot-sante/protocol/openid-connect/certs}
 
+  # ── Spring Cloud Gateway ──────────────────────────────────────────────────────
   cloud:
     gateway:
-      routes:
 
-        - id: vitals-management
-          uri: http://vitals-management:9090
-          predicates:
-            - Path=/api/vitals/**
-
-        - id: ingestion-service
-          uri: http://ingestion-service:8081
-          predicates:
-            - Path=/api/ingestion/**
-
-        - id: notification-service
-          uri: http://notification-service:9095
-          predicates:
-            - Path=/api/notifications/**
-
-        - id: health-public
-          uri: http://vitals-management:9090
-          predicates:
-            - Path=/health
-          filters:
-            - StripPrefix=0
-
+      # CORS global
       globalcors:
-        corsConfigurations:
+        cors-configurations:
           '[/**]':
             allowedOrigins:
               - "http://localhost:3000"
               - "http://localhost:4200"
-            allowedMethods: "*"
+              - "http://localhost:5173"
+            allowedMethods: [GET, POST, PUT, DELETE, OPTIONS]
             allowedHeaders: "*"
             allowCredentials: true
+            maxAge: 3600
 
+      # Timeouts HTTP client
       httpclient:
-        connect-timeout: 5000
+        connect-timeout: 5000   # 5 secondes
         response-timeout: 30s
 
+      routes:
+
+        # ── PUBLIC : health sans token ──────────────────────────────────────────
+        - id: health-public
+          uri: http://localhost:8080
+          predicates:
+            - Path=/health
+          filters:
+            - SetPath=/actuator/health
+
+        # ── ROLE_MEDECIN : biosignaux patients ──────────────────────────────────
+        - id: vitals-management
+          uri: http://vitals-management:9090
+          predicates:
+            - Path=/api/vitals/**
+          filters:
+            - RewritePath=/api/vitals/(?<segment>.*), /${segment}
+
+        # ── ROLE_DEVICE : ingestion depuis smartwatch ───────────────────────────
+        - id: ingestion-service
+          uri: http://ingestion-service:8081
+          predicates:
+            - Path=/api/ingestion/**
+          filters:
+            - RewritePath=/api/ingestion/(?<segment>.*), /${segment}
+
+        # ── ROLE_MEDECIN : analytics et anomalies ──────────────────────────────
+        - id: data-analytics
+          uri: http://data-analytics:8085
+          predicates:
+            - Path=/api/analytics/**
+          filters:
+            - RewritePath=/api/analytics/(?<segment>.*), /${segment}
+
+        # ── ROLE_MEDECIN : alertes ──────────────────────────────────────────────
+        - id: alert-service
+          uri: http://alert-service:8082
+          predicates:
+            - Path=/api/alerts/**
+          filters:
+            - RewritePath=/api/alerts/(?<segment>.*), /${segment}
+
+        # ── ROLE_MEDECIN : dashboard ────────────────────────────────────────────
+        - id: dashboard-service
+          uri: http://dashboard-service:5173
+          predicates:
+            - Path=/api/dashboard/**
+          filters:
+            - RewritePath=/api/dashboard/(?<segment>.*), /${segment}
+
+# ── Actuator ──────────────────────────────────────────────────────────────────
 management:
   endpoints:
     web:
       exposure:
-        include: health, info, gateway
+        include: health,info,metrics
   endpoint:
     health:
       show-details: always
 
+# ── Logging ───────────────────────────────────────────────────────────────────
 logging:
   level:
-    org.springframework.cloud.gateway: DEBUG
     com.medtech.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+    org.springframework.security: INFO
