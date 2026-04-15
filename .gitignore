@@ -16,3 +16,6 @@ hs_err_pid*.log
 # Python cache
 __pycache__/
 *.py[cod]
+
+data-analytics-service.zip
+data-analytics-service/venv/
