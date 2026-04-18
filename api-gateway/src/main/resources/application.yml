@@ -57,8 +57,6 @@ spring:
           uri: http://vitals-management:9090
           predicates:
             - Path=/api/vitals/**
-          filters:
-            - RewritePath=/api/vitals/(?<segment>.*), /${segment}
 
         # ── ROLE_DEVICE : ingestion depuis smartwatch ───────────────────────────
         - id: ingestion-service

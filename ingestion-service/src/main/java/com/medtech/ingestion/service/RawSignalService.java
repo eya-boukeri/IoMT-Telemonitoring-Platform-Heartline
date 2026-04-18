@@ -95,7 +95,13 @@ public class RawSignalService {
             JsonNode node = objectMapper.readTree(rawPayload);
             return objectMapper.writeValueAsString(node);
         } catch (JsonProcessingException ex) {
-            throw new IllegalArgumentException("rawPayload must be valid JSON", ex);
+            LOGGER.warn("rawPayload is not valid JSON, storing it as a JSON string");
+
+            try {
+                return objectMapper.writeValueAsString(rawPayload.trim());
+            } catch (JsonProcessingException serializationEx) {
+                throw new IllegalArgumentException("rawPayload could not be serialized", serializationEx);
+            }
         }
     }
 }

@@ -3,6 +3,12 @@
 -- médecins, patients, devices et assignations.
 -- ============================================================
 
+-- Crée les bases nécessaires au stack si elles n'existent pas.
+SELECT 'CREATE DATABASE keycloak'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\gexec
+SELECT 'CREATE DATABASE notification_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'notification_db')\gexec
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ------------------------------------------------------------

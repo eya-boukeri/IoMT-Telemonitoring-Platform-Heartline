@@ -2,10 +2,13 @@ services:
   mosquitto:
     image: eclipse-mosquitto:latest
     container_name: mosquitto-pfa-v2
-    network_mode: host                     # ← remplace ports et networks
+    ports:
+      - "1885:1883"
     volumes:
       - ./mosquitto/config:/mosquitto/config
-    # Supprimez ou commentez les lignes "ports" et "networks"
+    networks:
+      - medtech-network
+    restart: unless-stopped
 
   influxdb:
     image: influxdb:2.7
@@ -96,12 +99,13 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: postgres
       KC_DB_PASSWORD: postgres
-    command: start-dev
+    command: start-dev --import-realm
     volumes:
       # Dossier d'import JSON (à créer plus tard)
       - ./keycloak/import:/opt/keycloak/data/import:ro
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - medtech-network
     

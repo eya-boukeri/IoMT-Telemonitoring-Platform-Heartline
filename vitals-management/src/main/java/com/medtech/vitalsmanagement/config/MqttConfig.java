@@ -33,6 +33,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medtech.vitalsmanagement.model.ObservationData;
 import com.medtech.vitalsmanagement.model.VitalData;
@@ -99,7 +100,7 @@ public class MqttConfig {
      * - Ordre des messages n'est plus garanti (utiliser patientId comme clé Kafka)
      * - Légère latence (files d'attente du pool)
      * 
-     * 📊 CONFIG:
+     * 📊 CONFIG:  
      * - corePoolSize=8 : minimum threads actifs
      * - maxPoolSize=32: maximum threads
      * - queueCapacity=200 : max messages en attente
@@ -247,7 +248,7 @@ public class MqttConfig {
                     influxDBService.saveRawPayload(receivedTopic, payload);
                 }
 
-            } catch (Exception e) {
+            } catch (JsonProcessingException e) {
                 log.error("❌ Error parsing vital data - topic={} payload={}", receivedTopic, payload, e);
                 influxDBService.saveRawPayload(receivedTopic, payload);
             }
@@ -274,7 +275,7 @@ public class MqttConfig {
                             result.getRecordMetadata().offset());
                     }
                 });
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             log.error("❌ Error serializing vital data for Kafka: {}", e.getMessage(), e);
         }
     }
@@ -306,11 +307,187 @@ public class MqttConfig {
 
         // Try parsing as VitalData (simple snapshot format)
         try {
-            return objectMapper.readValue(payload, VitalData.class);
+            VitalData vitalData = objectMapper.readValue(payload, VitalData.class);
+            if (hasPersistableMetrics(vitalData)) {
+                return vitalData;
+            }
         } catch (JsonProcessingException e) {
-            String sanitized = sanitizeJsonLikePayload(payload);
-            return getLenientObjectMapper().readValue(sanitized, VitalData.class);
+            // Continue with structural fallback below.
         }
+
+        VitalData derivedVitalData = convertSnapshotPayloadToVitalData(payload);
+        if (derivedVitalData != null) {
+            return derivedVitalData;
+        }
+
+        String sanitized = sanitizeJsonLikePayload(payload);
+        return getLenientObjectMapper().readValue(sanitized, VitalData.class);
+    }
+
+    private VitalData convertSnapshotPayloadToVitalData(String payload) {
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            if (root == null || !root.isObject()) {
+                return null;
+            }
+
+            VitalData vitalData = new VitalData();
+            vitalData.setPatientId(readText(root, "patientId"));
+            vitalData.setStartTime(parseLocalDateTimeSafely(readText(root, "startTime")));
+            vitalData.setEndTime(parseLocalDateTimeSafely(readText(root, "endTime")));
+
+            if (vitalData.getEndTime() != null) {
+                vitalData.setTimestamp(vitalData.getEndTime().atZone(ZoneOffset.UTC).toInstant());
+            } else if (vitalData.getStartTime() != null) {
+                vitalData.setTimestamp(vitalData.getStartTime().atZone(ZoneOffset.UTC).toInstant());
+            }
+
+            List<Double> ppgValues = extractPpgValues(root.get("ppgData"));
+            if (!ppgValues.isEmpty()) {
+                applyPpgMetrics(vitalData, ppgValues);
+            }
+
+            List<Double> accelerometerMagnitudes = extractAccelerometerMagnitudes(root.get("accelerometerData"));
+            if (!accelerometerMagnitudes.isEmpty()) {
+                applyAccelerometerMetrics(vitalData, accelerometerMagnitudes);
+            }
+
+            if (vitalData.getPatientId() == null
+                && vitalData.getTimestamp() == null
+                && !hasPersistableMetrics(vitalData)) {
+                return null;
+            }
+
+            if (vitalData.getPatientId() != null || vitalData.getTimestamp() != null || hasPersistableMetrics(vitalData)) {
+                assessSignalQuality(vitalData);
+                return vitalData;
+            }
+
+            return null;
+        } catch (JsonProcessingException ex) {
+            log.debug("Failed to derive VitalData from snapshot payload", ex);
+            return null;
+        }
+    }
+
+    private List<Double> extractPpgValues(JsonNode ppgNode) {
+        List<Double> values = new ArrayList<>();
+        if (ppgNode == null || !ppgNode.isArray()) {
+            return values;
+        }
+
+        for (JsonNode entry : ppgNode) {
+            if (entry == null || entry.isNull()) {
+                continue;
+            }
+
+            if (entry.isNumber()) {
+                values.add(entry.asDouble());
+                continue;
+            }
+
+            if (entry.isObject()) {
+                Double green = extractDouble(entry.get("green"));
+                Double red = extractDouble(entry.get("red"));
+                if (green != null && red != null) {
+                    values.add((green + red) / 2.0);
+                    continue;
+                }
+
+                for (JsonNode nested : entry) {
+                    Double numeric = extractDouble(nested);
+                    if (numeric != null) {
+                        values.add(numeric);
+                    }
+                }
+            }
+        }
+
+        return values;
+    }
+
+    private List<Double> extractAccelerometerMagnitudes(JsonNode accelerometerNode) {
+        List<Double> magnitudes = new ArrayList<>();
+        if (accelerometerNode == null || !accelerometerNode.isArray()) {
+            return magnitudes;
+        }
+
+        for (JsonNode entry : accelerometerNode) {
+            if (entry == null || !entry.isObject()) {
+                continue;
+            }
+
+            JsonNode pointNode = entry.get("accelerometerPoint");
+            if (pointNode == null) {
+                pointNode = entry;
+            }
+
+            Double x = extractDouble(pointNode.get("x"));
+            Double y = extractDouble(pointNode.get("y"));
+            Double z = extractDouble(pointNode.get("z"));
+            if (x != null && y != null && z != null) {
+                magnitudes.add(Math.sqrt(x * x + y * y + z * z));
+            }
+        }
+
+        return magnitudes;
+    }
+
+    private void applyPpgMetrics(VitalData vitalData, List<Double> ppgValues) {
+        vitalData.setPpgDataPoints(ppgValues.size());
+        vitalData.setPpgGreenMin(ppgValues.stream().mapToDouble(v -> v).min().orElse(0.0));
+        vitalData.setPpgGreenMax(ppgValues.stream().mapToDouble(v -> v).max().orElse(0.0));
+        vitalData.setPpgGreenAverage(ppgValues.stream().mapToDouble(v -> v).average().orElse(0.0));
+
+        HeartRateAnalysis analysis = calculateHeartRateWithVariability(ppgValues);
+        vitalData.setHeartRate(analysis.averageHeartRate);
+        vitalData.setHeartRateMin(analysis.minHeartRate);
+        vitalData.setHeartRateMax(analysis.maxHeartRate);
+        vitalData.setHeartRateVariability(analysis.variability);
+        vitalData.setDetectedPeaks(analysis.peakCount);
+    }
+
+    private void applyAccelerometerMetrics(VitalData vitalData, List<Double> magnitudes) {
+        vitalData.setAccelerometerDataPoints(magnitudes.size());
+
+        double averageMagnitude = magnitudes.stream().mapToDouble(v -> v).average().orElse(0.0);
+        double maxMagnitude = magnitudes.stream().mapToDouble(v -> v).max().orElse(0.0);
+        double variance = magnitudes.stream()
+            .mapToDouble(v -> Math.pow(v - averageMagnitude, 2))
+            .average()
+            .orElse(0.0);
+
+        vitalData.setAccelerometerMagnitudeAverage(Math.round(averageMagnitude * 100.0) / 100.0);
+        vitalData.setAccelerometerMagnitudeMax(Math.round(maxMagnitude * 100.0) / 100.0);
+        vitalData.setAccelerometerVariance(Math.sqrt(variance));
+    }
+
+    private boolean hasPersistableMetrics(VitalData vitalData) {
+        if (vitalData == null) {
+            return false;
+        }
+
+        return vitalData.getHeartRate() != null
+            || vitalData.getBloodPressureSystolic() != null
+            || vitalData.getBloodPressureDiastolic() != null
+            || vitalData.getHeartRateMin() != null
+            || vitalData.getHeartRateMax() != null
+            || vitalData.getHeartRateVariability() != null
+            || vitalData.getDetectedPeaks() != null
+            || vitalData.getPpgGreenMin() != null
+            || vitalData.getPpgGreenMax() != null
+            || vitalData.getPpgGreenAverage() != null
+            || vitalData.getPpgRedMin() != null
+            || vitalData.getPpgRedMax() != null
+            || vitalData.getPpgRedAverage() != null
+            || vitalData.getPpgDataPoints() != null
+            || vitalData.getAccelerometerMagnitudeAverage() != null
+            || vitalData.getAccelerometerMagnitudeMax() != null
+            || vitalData.getAccelerometerVariance() != null
+            || vitalData.getAccelerometerDataPoints() != null
+            || vitalData.getCollectionDurationSeconds() != null
+            || vitalData.getSignalQuality() != null
+            || vitalData.getSignalQualityScore() != null;
     }
 
     private VitalData convertObservationDataToVitalData(ObservationData observationData) {
@@ -504,7 +681,7 @@ public class MqttConfig {
         
         // Check data point count
         Integer ppgPointsValue = vitalData.getPpgDataPoints();
-        int ppgPoints = ppgPointsValue != null ? ppgPointsValue.intValue() : 0;
+        int ppgPoints = ppgPointsValue != null ? ppgPointsValue : 0;
         if (ppgPoints < 100) qualityScore -= 20; // insufficient data
         
         // Check PPG signal stability
@@ -646,10 +823,24 @@ public class MqttConfig {
         }
 
         try {
-            return Double.parseDouble(value.toString());
+            return Double.valueOf(value.toString());
         } catch (NumberFormatException ex) {
             return null;
         }
+    }
+
+    private String readText(JsonNode root, String field) {
+        if (root == null || field == null) {
+            return null;
+        }
+
+        JsonNode node = root.get(field);
+        if (node == null || node.isNull()) {
+            return null;
+        }
+
+        String value = node.asText(null);
+        return (value == null || value.isBlank()) ? null : value;
     }
 
     private LocalDateTime parseLocalDateTimeSafely(String value) {
@@ -704,7 +895,7 @@ public class MqttConfig {
                 return;
             }
 
-            Object payload = msg.getPayload();
+            Object payload = msg != null ? msg.getPayload() : null;
             if (payload instanceof Throwable throwable) {
                 log.error("🚨 MQTT Error: {} - Message: {}",
                     throwable.getClass().getSimpleName(),

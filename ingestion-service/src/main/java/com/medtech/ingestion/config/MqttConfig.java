@@ -164,6 +164,12 @@ public class MqttConfig {
                     timestamp
                 );
 
+                if (root == null || !root.isObject()) {
+                    LOGGER.warn("MQTT payload is not an object, stored raw signal only - topic={} rawSignalId={}",
+                        topic, savedRaw.getId());
+                    return;
+                }
+
                 kafkaProducerService.publishRawSignal(savedRaw);
 
                 FilteredSignal filteredSignal = signalProcessingService.filter(savedRaw);

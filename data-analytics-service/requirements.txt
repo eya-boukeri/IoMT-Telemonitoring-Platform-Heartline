@@ -1,12 +1,15 @@
-# Core ML
-xgboost==2.0.3
-scikit-learn==1.4.2
-joblib==1.4.2
-numpy==1.26.4
-scipy==1.13.0
+# Core ML (using pre-compiled wheels compatible with Python 3.14)
+numpy>=2.0.0
+scipy>=1.13.0
+scikit-learn>=1.5.0
+xgboost>=2.0.0
+joblib>=1.4.0
 
 # InfluxDB 2.x Python client
-influxdb-client==1.44.0
+influxdb-client>=1.44.0
 
 # Kafka (confluent – more reliable than kafka-python in containerized envs)
-confluent-kafka==2.4.0
+confluent-kafka>=2.4.0
+
+# Testing
+pytest>=8.0.0

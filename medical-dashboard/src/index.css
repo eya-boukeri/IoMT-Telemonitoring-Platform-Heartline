@@ -1,10 +1,16 @@
 :root {
   line-height: 1.5;
   font-weight: 400;
+  color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --bg-base: #170711;
+  --bg-card: #204f59;
+  --border: #2f6f7a;
+  --text-primary: #d7edf0;
+  --text-muted: #8bb6bc;
 }
 
 * {
@@ -20,4 +26,30 @@ body,
 
 body {
   min-width: 320px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+::selection {
+  background: rgba(116, 216, 246, 0.35);
+  color: var(--text-primary);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #130812;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #2e6a74;
+  border-radius: 999px;
+  border: 2px solid #130812;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #39818d;
 }

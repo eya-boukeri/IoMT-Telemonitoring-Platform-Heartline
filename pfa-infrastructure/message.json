@@ -1,1 +1,7 @@
-﻿{"patientId":"test","ppgData":[100,102,98,101,99],"deviceId":"watch-001"}
+﻿{
+  "patientId": "eya",
+  "startTime": "2025-04-18T10:00:00",
+  "endTime": "2025-04-18T10:00:10",
+  "ppgData": [100, 102, 101, 105, 99, 110, 108],
+  "accelerometerData": [{"x": 0.12, "y": 9.81, "z": 0.05}]
+}

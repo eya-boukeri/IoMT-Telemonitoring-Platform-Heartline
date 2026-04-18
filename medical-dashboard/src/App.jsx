@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import './App.css';
 
 const API_ROOT = import.meta.env.REACT_APP_API_URL || '/api';
@@ -66,6 +66,43 @@ const formatTime = (timestamp) => {
   });
 };
 
+const avatarClassPool = ['av-jd', 'av-ml', 'av-ra'];
+
+const getAvatarClass = (value) => {
+  if (!value) return avatarClassPool[0];
+
+  const hash = String(value)
+    .split('')
+    .reduce((sum, char) => sum + char.charCodeAt(0), 0);
+
+  return avatarClassPool[hash % avatarClassPool.length];
+};
+
+const getAvatarLabel = (value) => {
+  if (!value) return 'PT';
+
+  const tokens = String(value).trim().split(/\s+/);
+  if (tokens.length === 1) {
+    return tokens[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${tokens[0][0]}${tokens[1][0]}`.toUpperCase();
+};
+
+const getSeverityClass = (severity) => {
+  const normalized = String(severity || 'WARNING').toUpperCase();
+
+  if (normalized === 'CRITICAL') {
+    return 'critical';
+  }
+
+  if (normalized === 'WARNING' || normalized === 'MEDIUM') {
+    return 'monitor';
+  }
+
+  return 'stable';
+};
+
 function App() {
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -85,7 +122,7 @@ function App() {
     const normalized = {
       id: rawAlert.alertId || `${Date.now()}-${Math.random()}`,
       alertType: rawAlert.alertType || 'notification',
-      message: rawAlert.message || 'Nouvelle alerte reçue',
+      message: rawAlert.message || 'Nouvelle alerte recue',
       severity: String(rawAlert.severity || 'WARNING').toUpperCase(),
       timestamp: rawAlert.timestamp || new Date().toISOString(),
     };
@@ -96,23 +133,20 @@ function App() {
     });
   }, []);
 
-  const pushVitalPoint = useCallback(
-    (rawPoint, synthetic = false) => {
-      setVitalData((previous) => {
-        const previousPoint = previous.length ? previous[previous.length - 1] : null;
-        const nextPoint = synthetic ? evolveVitalPoint(previousPoint) : buildVitalPoint(rawPoint, previousPoint);
+  const pushVitalPoint = useCallback((rawPoint, synthetic = false) => {
+    setVitalData((previous) => {
+      const previousPoint = previous.length ? previous[previous.length - 1] : null;
+      const nextPoint = synthetic ? evolveVitalPoint(previousPoint) : buildVitalPoint(rawPoint, previousPoint);
 
-        if (previousPoint && previousPoint.timestamp === nextPoint.timestamp) {
-          return previous;
-        }
+      if (previousPoint && previousPoint.timestamp === nextPoint.timestamp) {
+        return previous;
+      }
 
-        lastPointAtRef.current = Date.now();
-        setLastRefreshAt(nextPoint.timestamp);
-        return [...previous, nextPoint].slice(-MAX_POINTS);
-      });
-    },
-    []
-  );
+      lastPointAtRef.current = Date.now();
+      setLastRefreshAt(nextPoint.timestamp);
+      return [...previous, nextPoint].slice(-MAX_POINTS);
+    });
+  }, []);
 
   const fetchStats = useCallback(async (patientId) => {
     try {
@@ -175,30 +209,24 @@ function App() {
     }
   }, [selectedPatient]);
 
-  // Charger la liste des patients au démarrage
   useEffect(() => {
     fetchPatients();
   }, [fetchPatients]);
 
-  // Connexion SSE pour le patient sélectionné
   useEffect(() => {
     if (!selectedPatient) return;
 
-    // Fermer la connexion précédente
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
 
-    // Charger l'historique initial
     fetchLatestBatch(selectedPatient);
     fetchStats(selectedPatient);
 
-    // Ouvrir le stream SSE
     const eventSource = new EventSource(`${SSE_BASE_URL}/stream/${selectedPatient}`);
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
-      console.log('✅ SSE Connected for patient:', selectedPatient);
       setIsConnected(true);
     };
 
@@ -209,8 +237,8 @@ function App() {
           return;
         }
         pushVitalPoint(parsed);
-      } catch (error) {
-        // Ignore les messages non JSON comme les événements ready
+      } catch (_error) {
+        // Ignore non-JSON messages.
       }
     };
 
@@ -249,10 +277,6 @@ function App() {
       }
     };
 
-    notificationEventSource.onerror = () => {
-      // Notification stream may be transient; keep vitals stream independent.
-    };
-
     return () => {
       if (notificationEventSource) {
         notificationEventSource.close();
@@ -260,7 +284,6 @@ function App() {
     };
   }, [selectedPatient, pushAlert]);
 
-  // Rafraîchissement auto toutes les 3 secondes
   useEffect(() => {
     if (!selectedPatient) return;
 
@@ -291,118 +314,140 @@ function App() {
   );
 
   const tooltipStyle = {
-    background: 'rgba(255, 255, 255, 0.95)',
-    border: '1px solid #d7d2fe',
+    background: '#161b22',
+    border: '1px solid #1c2128',
+    color: '#e6edf3',
     borderRadius: '12px',
-    boxShadow: '0 10px 25px rgba(77, 44, 126, 0.16)',
+    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.35)',
   };
 
   const currentPatientLabel = selectedPatient || 'Patient inconnu';
 
   return (
-    <div className="dashboard">
-      <div className="app-container">
-        <header className="app-header">
-          <h1>
-            <span className="header-icon">🏥</span>
-            Dashboard Médical - Surveillance Temps Réel
-          </h1>
+    <div className="dashboard medical-shell">
+      <aside className="side-nav">
+        <div className="side-logo">Rx</div>
+        <button type="button" className="nav-btn active">▦</button>
+        <button type="button" className="nav-btn">♡</button>
+        <button type="button" className="nav-btn">◷</button>
+        <button type="button" className="nav-btn">⊕</button>
+        <button type="button" className="nav-btn">☰</button>
+        <button type="button" className="nav-btn">☆</button>
+      </aside>
+
+      <div className="main-panel">
+        <header className="top-overview">
+          <div className="overview-title-block">
+            <h1>Heartline</h1>
+            <p>DASHBOARD MEDICAL · SURVEILLANCE TEMPS REEL</p>
+          </div>
+
+          <div className="selector-inline">
+            <label htmlFor="patient-select">Patient:</label>
+            <select
+              id="patient-select"
+              value={selectedPatient || ''}
+              onChange={(event) => setSelectedPatient(event.target.value)}
+            >
+              {patients.map((patient) => (
+                <option key={patient} value={patient}>{patient}</option>
+              ))}
+            </select>
+            <span>Derniere donnee: {lastRefreshAt ? formatTime(lastRefreshAt) : '--:--:--'}</span>
+          </div>
         </header>
 
-        <div className="patient-selector">
-          <span className="selector-emoji">🧑‍⚕️</span>
-          <label>Patient:</label>
-          <select
-            value={selectedPatient || ''}
-            onChange={(e) => setSelectedPatient(e.target.value)}
-          >
-            {patients.map((patient) => (
-              <option key={patient} value={patient}>{patient}</option>
-            ))}
-          </select>
-          <span className="refresh-time">
-            Dernière donnée: {lastRefreshAt ? formatTime(lastRefreshAt) : '--:--:--'}
-          </span>
-        </div>
-
-        {!!patients.length && (
-          <div className="patient-cards">
-            {patients.map((patient) => (
-              <button
-                key={patient}
-                type="button"
-                className={`patient-card-chip ${selectedPatient === patient ? 'active' : ''}`}
-                onClick={() => setSelectedPatient(patient)}
-              >
-                <span>👤</span>
-                <span>{patient}</span>
-              </button>
-            ))}
+        <section className="hero-monitor panel">
+          <div className="panel-head">
+            <h2>Signal PPG</h2>
+            <p>{currentPatientLabel}</p>
           </div>
-        )}
 
-        <section className="patient-card">
-          <div className="patient-header">
-            <div className="patient-title">
-              <span className="patient-icon">👤</span>
-              {currentPatientLabel}
+          <div className="hero-graph">
+            <span className="ecg-tag">PPG</span>
+            <div className="chart-canvas">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid stroke="#1b2635" strokeDasharray="3 3" vertical={false} />
+                  <XAxis hide dataKey="time" />
+                  <YAxis hide />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Line
+                    type="monotone"
+                    dataKey="ppgSignal"
+                    stroke="#2f81f7"
+                    strokeWidth={2.5}
+                    dot={false}
+                    isAnimationActive={true}
+                    animationDuration={650}
+                    name="PPG"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
-            <div className={`connection-status ${isConnected ? 'online' : 'offline'}`}>
+          </div>
+
+          <div className="hero-stats">
+            <div className={`connection-inline ${isConnected ? 'stable' : 'critical'}`}>
               <span className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></span>
-              {isConnected ? 'Connecté en Temps Réel' : 'Connexion perdue'}
+              {isConnected ? 'Connecte en temps reel' : 'Connexion perdue'}
             </div>
           </div>
+        </section>
 
-          {alerts.length > 0 && (
-            <div className="alert-container">
-              {alerts.map((alert) => {
-                const isCritical = alert.severity === 'CRITICAL';
+        <section className="lower-grid">
+          <article className="panel patients-panel">
+            <div className="panel-head with-link">
+              <div>
+                <h3>Active Patients</h3>
+                <p>SELECTION PATIENT</p>
+              </div>
+            </div>
+
+            <div className="patient-list">
+              {patients.map((patient) => (
+                <button
+                  key={patient}
+                  type="button"
+                  className={`patient-row ${selectedPatient === patient ? 'active' : ''}`}
+                  onClick={() => setSelectedPatient(patient)}
+                >
+                  <span className={`avatar-pill ${getAvatarClass(patient)}`}>{getAvatarLabel(patient)}</span>
+                  <span className="patient-id">
+                    <strong>{patient}</strong>
+                    <small>{selectedPatient === patient ? 'Patient actif' : 'Cliquez pour selectionner'}</small>
+                  </span>
+                  <span className={`status-chip ${selectedPatient === patient ? 'stable' : 'monitor'}`}>
+                    {selectedPatient === patient ? 'Actif' : 'Standby'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </article>
+
+          <article className="panel schedule-panel">
+            <div className="panel-head">
+              <h3>Alertes</h3>
+              <p>FLUX NOTIFICATION</p>
+            </div>
+
+            <div className="schedule-list">
+              {alerts.slice(0, 4).map((alert) => {
+                const severityClass = getSeverityClass(alert.severity);
                 return (
-                  <div
-                    key={alert.id}
-                    className={`alert ${isCritical ? 'alert-critical' : 'alert-warning'}`}
-                  >
-                    <div className="alert-icon">{isCritical ? '🚨' : '⚠️'}</div>
-                    <div className="alert-content">
+                  <div key={alert.id} className="schedule-item">
+                    <span className="schedule-time">{formatTime(alert.timestamp)}</span>
+                    <span className={`schedule-dot ${severityClass}`}></span>
+                    <div className="schedule-text">
                       <strong>{alert.alertType}</strong>
                       <p>{alert.message}</p>
-                      <small>{formatTime(alert.timestamp)}</small>
                     </div>
                   </div>
                 );
               })}
+              {!alerts.length && <p className="no-data">Aucune alerte pour le moment.</p>}
             </div>
-          )}
-
-          <div className="charts-grid">
-            <div className="chart-container">
-              <div className="chart-header">
-                <div className="chart-icon heart-icon">🫀</div>
-                <div className="chart-title">Signal PPG (Photopléthysmogramme)</div>
-              </div>
-              <div className="chart-canvas">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip contentStyle={tooltipStyle} />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="ppgSignal"
-                      stroke="#1f8ef1"
-                      strokeWidth={3}
-                      dot={false}
-                      isAnimationActive={true}
-                      animationDuration={650}
-                      name="PPG"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
+          </article>
         </section>
       </div>
     </div>
