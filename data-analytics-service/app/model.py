@@ -1,85 +1,69 @@
 """
-model.py
-Wrapper around the pre-trained XGBoost model (.joblib).
-The model is loaded once at startup; inference is stateless.
+model.py — Chargement du modèle XGBoost et inférence.
+
+Ce module encapsule toute la logique ML dans une seule classe PPGModel.
+Le reste du code n'a pas à savoir que c'est XGBoost — ça facilite
+le remplacement futur par un autre modèle (PyTorch, sklearn, etc.).
 """
 
-import os
 import logging
-import numpy as np
-import joblib
-from typing import Tuple, List
+from pathlib import Path
 
-from app.config import MODEL_PATH
+import joblib
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
 class PPGModel:
     """
-    Loads and wraps the pre-trained XGBoost PPG anomaly detector.
+    Wrapper autour du modèle XGBoost sérialisé.
 
-    predict() returns:
-        predicted_class (int)  : 0 = normal, 1 = anomaly
-        confidence      (float): probability of the predicted class [0, 1]
+    Le modèle est chargé une seule fois au démarrage du service,
+    puis réutilisé pour chaque inférence (économie mémoire/CPU).
+
+    Args:
+        model_path (str): Chemin vers le fichier .joblib du modèle.
     """
 
-    def __init__(self):
-        self._model      = None
-        self.model_path  = MODEL_PATH
-        # Extract version string from filename, e.g. "ppg_model_v2.1.joblib" → "v2.1"
-        self.model_version = self._parse_version(MODEL_PATH)
-        self._load()
-
-    # ── Loading ────────────────────────────────────────────────────────────────
-
-    def _load(self):
-        if not os.path.exists(self.model_path):
+    def __init__(self, model_path: str):
+        path = Path(model_path)
+        if not path.exists():
             raise FileNotFoundError(
-                f"Model file not found: {self.model_path}. "
-                "Run create_dummy_model.py to generate a test model."
+                f"Modèle introuvable : {model_path}\n"
+                "Vérifiez que le fichier .joblib est bien monté dans le conteneur."
             )
-        logger.info(f"Loading model from {self.model_path} (version: {self.model_version})")
-        self._model = joblib.load(self.model_path)
-        logger.info("Model loaded successfully.")
 
-    @staticmethod
-    def _parse_version(path: str) -> str:
-        """Extract version tag from filename, fallback to 'unknown'."""
-        basename = os.path.basename(path)           # ppg_model_v2.1.joblib
-        name     = os.path.splitext(basename)[0]    # ppg_model_v2.1
-        parts    = name.split("_")
-        for part in reversed(parts):
-            if part.startswith("v") and len(part) > 1:
-                return part
-        return "unknown"
+        self.model = joblib.load(path)
+        # Version déduite du nom de fichier (ex: "ppg_model_v2" → version = "ppg_model_v2")
+        # Incluse dans chaque alerte pour la traçabilité des prédictions.
+        self.version = path.stem
+        logger.info("Modèle chargé : %s", self.version)
 
-    # ── Inference ──────────────────────────────────────────────────────────────
-
-    def predict(self, features: List[float]) -> Tuple[int, float]:
+    def predict(self, features: np.ndarray) -> tuple[int, float]:
         """
-        Run inference on a single feature vector.
+        Prédit la classe et la confiance à partir d'un vecteur de features.
 
         Args:
-            features: list of 14 floats from feature_extractor.extract_features()
+            features: np.ndarray 1D de shape (n_features,).
 
         Returns:
-            (predicted_class, confidence)
-            predicted_class: 0 = normal, 1 = anomaly
-            confidence: max class probability from predict_proba()
+            Tuple (pred_class, confidence) où :
+              - pred_class  : int  → 0 = normal, 1 = anomalie
+              - confidence  : float → probabilité max ∈ [0.0, 1.0]
         """
-        if self._model is None:
-            raise RuntimeError("Model not loaded.")
+        # Le modèle attend une matrice 2D (1 ligne = 1 exemple)
+        x = features.reshape(1, -1)
 
-        X = np.array(features, dtype=float).reshape(1, -1)
+        pred_class = int(self.model.predict(x)[0])
 
-        predicted_class = int(self._model.predict(X)[0])
+        # predict_proba renvoie [[p_classe_0, p_classe_1, ...]]
+        # On prend la probabilité de la classe prédite (la plus élevée)
+        proba_vector = self.model.predict_proba(x)[0]
+        confidence = float(proba_vector.max())
 
-        # Use predict_proba when available, else assign hard confidence
-        if hasattr(self._model, "predict_proba"):
-            proba      = self._model.predict_proba(X)[0]
-            confidence = float(np.max(proba))
-        else:
-            confidence = 1.0 if predicted_class == 1 else 0.0
+        logger.debug("Prédiction : classe=%d, confiance=%.3f", pred_class, confidence)
+        return pred_class, confidence
 
-        return predicted_class, confidence
+    def __repr__(self) -> str:
+        return f"PPGModel(version={self.version!r})"

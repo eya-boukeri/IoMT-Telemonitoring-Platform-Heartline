@@ -1,0 +1,24 @@
+# ── Étape 1 : image de base légère ────────────────────────────────────────
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# ── Étape 2 : installer les dépendances (couche cachée séparément) ─────────
+# On copie requirements.txt avant le code source :
+# si le code change mais pas les dépendances, Docker réutilise ce layer.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Étape 3 : copier le code source et le modèle ──────────────────────────
+COPY app/ ./app/
+COPY models/ ./models/
+
+# ── Étape 4 : variables d'environnement ───────────────────────────────────
+# PYTHONPATH permet les imports relatifs (from .config import ...)
+ENV PYTHONPATH=/app
+
+# Port exposé pour un éventuel health check HTTP (non implémenté ici)
+EXPOSE 8080
+
+# ── Étape 5 : commande de démarrage ───────────────────────────────────────
+CMD ["python", "-m", "app.main"]

@@ -216,6 +216,27 @@ services:
     networks:
       - medtech-network
 
+  data-analytics-service:
+    build: ../data-analytics-service
+    container_name: data-analytics-service-pfa
+    environment:
+      KAFKA_BROKERS: kafka-pfa-v2:9092
+      KAFKA_TOPIC_OUT: medical-alerts
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: my-secret-token
+      INFLUXDB_ORG: myorg
+      INFLUXDB_BUCKET: medical_data
+      MODEL_PATH: /app/models/ppg_model.joblib
+      POLL_INTERVAL_SECONDS: 10
+      QUERY_WINDOW_SECONDS: 300
+      CONFIDENCE_THRESHOLD: 0.7
+      COOLDOWN_SECONDS: 60
+    depends_on:
+      - kafka
+      - influxdb
+    networks:
+      - medtech-network
+
 networks:
   medtech-network:
     driver: bridge
