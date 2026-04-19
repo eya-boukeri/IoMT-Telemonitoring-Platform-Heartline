@@ -5,10 +5,12 @@ import './App.css';
 const API_ROOT = import.meta.env.REACT_APP_API_URL || '/api';
 const API_BASE_URL = `${API_ROOT}/vitals`;
 const SSE_BASE_URL = API_BASE_URL;
-const NOTIFICATION_SSE_BASE_URL = `${API_ROOT}/notifications`;
+const NOTIFICATION_API_ROOT = import.meta.env.VITE_NOTIFICATION_API_URL || import.meta.env.REACT_APP_NOTIFICATION_API_URL || API_ROOT;
+const NOTIFICATION_SSE_BASE_URL = `${NOTIFICATION_API_ROOT}/notifications`;
 const MAX_POINTS = 50;
 const AUTO_UPDATE_MS = 3000;
 const MAX_ALERTS = 8;
+const FALLBACK_PATIENT_ID = 'patient-001';
 
 const DEFAULT_METRICS = {
   ppgSignal: 1250,
@@ -120,8 +122,9 @@ function App() {
     }
 
     const normalized = {
-      id: rawAlert.alertId || `${Date.now()}-${Math.random()}`,
-      alertType: rawAlert.alertType || 'notification',
+      id: rawAlert.alertId || rawAlert.alert_id || `${Date.now()}-${Math.random()}`,
+      patientId: rawAlert.patientId || rawAlert.patient_id || selectedPatient || 'Patient inconnu',
+      alertType: rawAlert.alertType || rawAlert.alert_type || 'notification',
       message: rawAlert.message || 'Nouvelle alerte recue',
       severity: String(rawAlert.severity || 'WARNING').toUpperCase(),
       timestamp: rawAlert.timestamp || new Date().toISOString(),
@@ -206,6 +209,8 @@ function App() {
       }
     } catch (error) {
       console.error('Error fetching patients:', error);
+      setPatients([FALLBACK_PATIENT_ID]);
+      setSelectedPatient((currentSelectedPatient) => currentSelectedPatient || FALLBACK_PATIENT_ID);
     }
   }, [selectedPatient]);
 
@@ -268,7 +273,7 @@ function App() {
     );
     notificationEventSourceRef.current = notificationEventSource;
 
-    notificationEventSource.onmessage = (event) => {
+    const handleNotificationEvent = (event) => {
       try {
         const parsed = JSON.parse(event.data);
         pushAlert(parsed);
@@ -276,6 +281,11 @@ function App() {
         // Ignore non-JSON housekeeping events.
       }
     };
+
+    // Backend sends named SSE events: event: alert
+    notificationEventSource.addEventListener('alert', handleNotificationEvent);
+    // Keep fallback for unnamed events.
+    notificationEventSource.onmessage = handleNotificationEvent;
 
     return () => {
       if (notificationEventSource) {
@@ -441,6 +451,7 @@ function App() {
                     <div className="schedule-text">
                       <strong>{alert.alertType}</strong>
                       <p>{alert.message}</p>
+                      <small>Patient: {alert.patientId}</small>
                     </div>
                   </div>
                 );

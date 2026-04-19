@@ -82,6 +82,12 @@ spring:
           filters:
             - RewritePath=/api/alerts/(?<segment>.*), /${segment}
 
+        # ── ROLE_MEDECIN : notifications (SSE + stats) ───────────────────────
+        - id: notification-service
+          uri: http://notification-service:9095
+          predicates:
+            - Path=/api/notifications/**
+
         # ── ROLE_MEDECIN : dashboard ────────────────────────────────────────────
         - id: dashboard-service
           uri: http://dashboard-service:5173
