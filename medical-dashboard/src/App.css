@@ -7,6 +7,9 @@
   --text-muted: #8bb6bc;
   --blue-soft: #74d8f6;
   --blue-strong: #35b8ea;
+  --severity-critical: #ff4444;
+  --severity-warning: #ffaa33;
+  --severity-info: #4488ff;
 }
 
 .dashboard.medical-shell {
@@ -390,11 +393,25 @@
 
 .schedule-item {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto auto auto 1fr;
   gap: 0.6rem;
-  align-items: start;
+  align-items: center;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--border);
+}
+
+.schedule-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.schedule-text small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
 }
 
 .schedule-item:last-child {
@@ -547,6 +564,55 @@
   margin: 0;
   color: var(--text-muted);
   font-size: 0.93rem;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   SEVERITY BADGES - Alert type/severity display
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  min-width: 70px;
+  text-align: center;
+}
+
+.severity-critical {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 68, 68, 0.4);
+  box-shadow: 0 0 8px rgba(255, 68, 68, 0.2);
+}
+
+.severity-warning {
+  background: rgba(255, 170, 51, 0.2);
+  color: #ffa500;
+  border: 1px solid rgba(255, 170, 51, 0.4);
+  box-shadow: 0 0 8px rgba(255, 170, 51, 0.15);
+}
+
+.severity-info {
+  background: rgba(68, 136, 255, 0.2);
+  color: #5ba3ff;
+  border: 1px solid rgba(68, 136, 255, 0.4);
+  box-shadow: 0 0 8px rgba(68, 136, 255, 0.15);
+}
+
+/* Fallback pour status non reconnus */
+.severity-normal,
+.severity-unknown {
+  background: rgba(139, 182, 188, 0.2);
+  color: #a0d4db;
+  border: 1px solid rgba(139, 182, 188, 0.4);
+  box-shadow: 0 0 8px rgba(139, 182, 188, 0.15);
 }
 
 @keyframes pulse {

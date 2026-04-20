@@ -22,10 +22,11 @@ public class KafkaVitalsConsumer {
 
     /**
      * Listen to vital data from Kafka and push to all connected SSE clients
-     * Topics: sensors/vitals/*, medical-alerts, etc.
+     * Topics: vitals-data, vitals-aggregated
+     * Note: medical-alerts are handled by notification-service
      */
     @KafkaListener(
-        topics = {"medical-alerts", "vitals-topic", "vitals-events"},
+        topics = {"vitals-data", "vitals-aggregated"},
         groupId = "sse-stream-group",
         containerFactory = "kafkaListenerContainerFactory"
     )

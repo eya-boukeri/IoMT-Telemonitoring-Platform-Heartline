@@ -14,7 +14,7 @@ KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "kafka:9092")
 TOPIC_IN = os.getenv("KAFKA_TOPIC_IN", "ppg_processed")
 
 # Topic de sortie : alertes à destination des autres services (notifications, BDD...)
-TOPIC_OUT = os.getenv("KAFKA_TOPIC_OUT", "alerts")
+TOPIC_OUT = os.getenv("KAFKA_TOPIC_OUT", "medical-alerts")
 
 # Consumer group : permet à Kafka de mémoriser la position de lecture (offset)
 GROUP_ID = os.getenv("GROUP_ID", "data-analytics-group")

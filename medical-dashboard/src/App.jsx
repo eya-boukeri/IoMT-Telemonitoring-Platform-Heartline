@@ -5,7 +5,10 @@ import './App.css';
 const API_ROOT = import.meta.env.REACT_APP_API_URL || '/api';
 const API_BASE_URL = `${API_ROOT}/vitals`;
 const SSE_BASE_URL = API_BASE_URL;
-const NOTIFICATION_API_ROOT = import.meta.env.VITE_NOTIFICATION_API_URL || import.meta.env.REACT_APP_NOTIFICATION_API_URL || API_ROOT;
+// Direct service endpoints (bypass gateway authentication for local dev)
+const NOTIFICATION_API_ROOT = import.meta.env.VITE_NOTIFICATION_API_URL || 
+                              import.meta.env.REACT_APP_NOTIFICATION_API_URL || 
+                              (window.location.hostname === 'localhost' ? 'http://localhost:9095/api' : '/api');
 const NOTIFICATION_SSE_BASE_URL = `${NOTIFICATION_API_ROOT}/notifications`;
 const MAX_POINTS = 50;
 const AUTO_UPDATE_MS = 3000;
@@ -444,10 +447,13 @@ function App() {
             <div className="schedule-list">
               {alerts.slice(0, 4).map((alert) => {
                 const severityClass = getSeverityClass(alert.severity);
+                const severityLabel = alert.severity || 'INFO';
+                const severityBadgeClass = `severity-badge severity-${severityLabel.toLowerCase()}`;
                 return (
                   <div key={alert.id} className="schedule-item">
                     <span className="schedule-time">{formatTime(alert.timestamp)}</span>
                     <span className={`schedule-dot ${severityClass}`}></span>
+                    <div className={severityBadgeClass}>{severityLabel}</div>
                     <div className="schedule-text">
                       <strong>{alert.alertType}</strong>
                       <p>{alert.message}</p>

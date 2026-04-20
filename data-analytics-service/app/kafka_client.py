@@ -24,15 +24,20 @@ def send_alert(producer, topic, alert):
     """Envoie une alerte sur le topic Kafka, retourne True si réussi"""
     try:
         # Générer un ID unique si non fourni
-        if 'alert_id' not in alert or alert['alert_id'] is None:
+        alert_id = alert.get('alertId') or alert.get('alert_id')
+        if not alert_id:
             import uuid
-            alert['alert_id'] = str(uuid.uuid4())
-        # Utiliser device_id comme clé pour l'ordre
-        key = alert['device_id'].encode('utf-8')
+            alert_id = str(uuid.uuid4())
+        alert['alertId'] = alert_id
+        alert.pop('alert_id', None)
+
+        # Utiliser patientId comme clé pour l'ordre, avec fallback legacy.
+        key_source = alert.get('patientId') or alert.get('device_id') or 'unknown'
+        key = key_source.encode('utf-8')
         future = producer.send(topic, key=key, value=alert)
         # Attendre l'acquittement (timeout 5 secondes)
         future.get(timeout=5)
-        logger.debug(f"Alerte envoyée sur {topic} : {alert['alert_id']}")
+        logger.debug(f"Alerte envoyée sur {topic} : {alert['alertId']}")
         return True
     except Exception as e:
         logger.error(f"Échec envoi alerte : {e}")

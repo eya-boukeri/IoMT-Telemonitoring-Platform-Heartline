@@ -53,6 +53,14 @@ public class SecurityConfig {
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
             .authorizeExchange(ex -> ex
                 .pathMatchers("/actuator/health", "/health").permitAll()
+                .pathMatchers("/api/vitals/patients",
+                              "/api/vitals/latest/**",
+                              "/api/vitals/stats/**",
+                              "/api/vitals/stream/**",
+                              "/api/notifications/health",
+                              "/api/notifications/stats",
+                              "/api/notifications/stream/**")
+                    .permitAll()
                 .pathMatchers("/api/ingestion/**").hasRole("DEVICE")
                 .pathMatchers("/api/vitals/patient/**",
                               "/api/dashboard/patient/**")

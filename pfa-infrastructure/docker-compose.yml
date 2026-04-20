@@ -122,6 +122,8 @@ services:
       INFLUXDB_ORG: myorg
       INFLUXDB_BUCKET: medical_data
       MQTT_BROKER_URL: tcp://mosquitto:1883
+      KAFKA_TOPIC_VITALS: vitals-data
+      KAFKA_TOPIC_AGGREGATED: vitals-aggregated
     depends_on:
       - kafka
       - influxdb
@@ -144,6 +146,8 @@ services:
       INFLUXDB_TOKEN: my-secret-token
       INFLUXDB_ORG: myorg
       INFLUXDB_BUCKET: medical_data
+      KAFKA_TOPIC_AGGREGATED: vitals-aggregated
+      KAFKA_TOPIC_ALERTS: medical-alerts
     depends_on:
       - postgres
       - kafka
