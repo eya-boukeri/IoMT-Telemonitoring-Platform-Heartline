@@ -13,10 +13,11 @@ while ((Get-Date) -lt $endTime) {
         "P001" { 72 }
         "P002" { 82 }
         "P003" { 62 }
+        "CRITICAL" { 160 }
         default { 70 }
     }
     
-    $hrVariation = Get-Random -Minimum -3 -Maximum 4
+    $hrVariation = if ($PatientId -eq "CRITICAL") { Get-Random -Minimum -15 -Maximum 16 } else { Get-Random -Minimum -3 -Maximum 4 }
     $currentHR = $baseHR + $hrVariation
     
     $ppgData = @()

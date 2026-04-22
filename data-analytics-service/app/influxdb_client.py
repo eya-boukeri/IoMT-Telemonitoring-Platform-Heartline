@@ -49,5 +49,24 @@ class PPGInfluxReader:
                 values.append(record.get_value())
         return values
 
+    def get_metric_window(self, patient_id, field_name, window_seconds=30):
+        """Récupère les valeurs d'un champ InfluxDB sur une fenêtre de temps."""
+        now = datetime.now(tz=pytz.UTC)
+        start = now - timedelta(seconds=window_seconds)
+        query = f'''
+        from(bucket: "{self.bucket}")
+          |> range(start: {start.isoformat()}, stop: {now.isoformat()})
+          |> filter(fn: (r) => r._measurement == "vitals")
+          |> filter(fn: (r) => r.patientId == "{patient_id}")
+          |> filter(fn: (r) => r._field == "{field_name}")
+          |> sort(columns: ["_time"])
+        '''
+        tables = self.client.query_api().query(query, org=self.org)
+        values = []
+        for table in tables:
+            for record in table.records:
+                values.append(record.get_value())
+        return values
+
     def close(self):
         self.client.close()

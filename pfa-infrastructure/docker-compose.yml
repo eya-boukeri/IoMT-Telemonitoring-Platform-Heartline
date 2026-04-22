@@ -200,12 +200,13 @@ services:
       retries: 3
 
   medical-dashboard:
-    build: ../medical-dashboard
+    build:
+      context: ../medical-dashboard
+      args:
+        REACT_APP_API_URL: /api
     container_name: medical-dashboard-pfa
     ports:
       - "5173:80"
-    environment:
-      REACT_APP_API_URL: http://localhost:8080/api
     depends_on:
       - api-gateway
       - vitals-management

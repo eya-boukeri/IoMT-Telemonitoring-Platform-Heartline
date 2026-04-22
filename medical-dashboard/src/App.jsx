@@ -116,7 +116,7 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState(null);
   const eventSourceRef = useRef(null);
-  const notificationEventSourceRef = useRef(null);
+  const notificationEventSourcesRef = useRef([]);
   const lastPointAtRef = useRef(0);
 
   const pushAlert = useCallback((rawAlert) => {
@@ -126,7 +126,7 @@ function App() {
 
     const normalized = {
       id: rawAlert.alertId || rawAlert.alert_id || `${Date.now()}-${Math.random()}`,
-      patientId: rawAlert.patientId || rawAlert.patient_id || selectedPatient || 'Patient inconnu',
+      patientId: rawAlert.patientId || rawAlert.patient_id || 'Patient inconnu',
       alertType: rawAlert.alertType || rawAlert.alert_type || 'notification',
       message: rawAlert.message || 'Nouvelle alerte recue',
       severity: String(rawAlert.severity || 'WARNING').toUpperCase(),
@@ -263,18 +263,21 @@ function App() {
   }, [selectedPatient, fetchLatestBatch, fetchStats, pushVitalPoint]);
 
   useEffect(() => {
-    if (!selectedPatient) {
+    const validPatients = patients.filter(Boolean);
+
+    // Cleanup previous notification streams before creating new ones.
+    notificationEventSourcesRef.current.forEach((source) => {
+      try {
+        source.close();
+      } catch (_error) {
+        // Ignore close errors.
+      }
+    });
+    notificationEventSourcesRef.current = [];
+
+    if (!validPatients.length) {
       return;
     }
-
-    if (notificationEventSourceRef.current) {
-      notificationEventSourceRef.current.close();
-    }
-
-    const notificationEventSource = new EventSource(
-      `${NOTIFICATION_SSE_BASE_URL}/stream/${selectedPatient}`
-    );
-    notificationEventSourceRef.current = notificationEventSource;
 
     const handleNotificationEvent = (event) => {
       try {
@@ -285,17 +288,24 @@ function App() {
       }
     };
 
-    // Backend sends named SSE events: event: alert
-    notificationEventSource.addEventListener('alert', handleNotificationEvent);
-    // Keep fallback for unnamed events.
-    notificationEventSource.onmessage = handleNotificationEvent;
+    validPatients.forEach((patientId) => {
+      const source = new EventSource(`${NOTIFICATION_SSE_BASE_URL}/stream/${patientId}`);
+      source.addEventListener('alert', handleNotificationEvent);
+      source.onmessage = handleNotificationEvent;
+      notificationEventSourcesRef.current.push(source);
+    });
 
     return () => {
-      if (notificationEventSource) {
-        notificationEventSource.close();
-      }
+      notificationEventSourcesRef.current.forEach((source) => {
+        try {
+          source.close();
+        } catch (_error) {
+          // Ignore close errors.
+        }
+      });
+      notificationEventSourcesRef.current = [];
     };
-  }, [selectedPatient, pushAlert]);
+  }, [patients, pushAlert]);
 
   useEffect(() => {
     if (!selectedPatient) return;

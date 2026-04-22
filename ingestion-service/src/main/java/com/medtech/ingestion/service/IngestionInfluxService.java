@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.StringJoiner;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -47,16 +46,19 @@ public class IngestionInfluxService {
             return false;
         }
 
+        log.debug("InfluxDB line protocol: [{}]", lineProtocol);
+
         try {
             URI uri = buildWriteUri();
             HttpRequest request = HttpRequest.newBuilder(uri)
-                .header("Authorization", "Token " + token)
-                .header("Content-Type", "text/plain; charset=utf-8")
-                .POST(HttpRequest.BodyPublishers.ofString(lineProtocol, StandardCharsets.UTF_8))
-                .build();
+                    .header("Authorization", "Token " + token)
+                    .header("Content-Type", "text/plain; charset=utf-8")
+                    .POST(HttpRequest.BodyPublishers.ofString(lineProtocol, StandardCharsets.UTF_8))
+                    .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                log.info("✅ InfluxDB write successful for patient {}", metrics.getPatientId());
                 return true;
             }
 
@@ -75,8 +77,8 @@ public class IngestionInfluxService {
     private URI buildWriteUri() {
         String baseUrl = stripTrailingSlash(influxUrl);
         String uri = baseUrl + "/api/v2/write?org=" + encodeQueryParam(influxOrg)
-            + "&bucket=" + encodeQueryParam(bucket)
-            + "&precision=ns";
+                + "&bucket=" + encodeQueryParam(bucket)
+                + "&precision=ns";
         return URI.create(uri);
     }
 
@@ -85,70 +87,97 @@ public class IngestionInfluxService {
         long epochNanos = timestamp.getEpochSecond() * 1_000_000_000L + timestamp.getNano();
 
         List<String> fields = new ArrayList<>();
-        addNumericField(fields, "sample_count", metrics.getSampleCount());
-        addNumericField(fields, "estimated_heart_rate", metrics.getEstimatedHeartRate());
-        addNumericField(fields, "respiratory_rate", metrics.getRespiratoryRate());
-        addNumericField(fields, "rr_mean_ms", metrics.getRrMeanMs());
+        addLongField(fields,   "sample_count",          metrics.getSampleCount());
+        addDoubleField(fields, "estimated_heart_rate",   metrics.getEstimatedHeartRate());
+        addDoubleField(fields, "respiratory_rate",       metrics.getRespiratoryRate());
+        addDoubleField(fields, "rr_mean_ms",             metrics.getRrMeanMs());
         if (rrIntervalsMs != null && !rrIntervalsMs.isEmpty()) {
             addStringField(fields, "rr_intervals_ms", rrIntervalsMs.toString());
         }
-        addNumericField(fields, "hrv_sdnn", metrics.getHrvSdnn());
-        addNumericField(fields, "hrv_rmssd", metrics.getHrvRmssd());
-        addNumericField(fields, "hrv_lf_hf", metrics.getHrvLfHf());
-        addNumericField(fields, "vascular_index", metrics.getVascularIndex());
-        addNumericField(fields, "perfusion_index", metrics.getPerfusionIndex());
-        addNumericField(fields, "signal_quality_score", metrics.getSignalQualityScore());
-        addStringField(fields, "signal_quality_label", metrics.getSignalQualityLabel());
-        addNumericField(fields, "stress_index", metrics.getStressIndex());
-        addStringField(fields, "stress_level", metrics.getStressLevel());
-        addNumericField(fields, "ppg_mean", metrics.getPpgMean());
-        addNumericField(fields, "ppg_min", metrics.getPpgMin());
-        addNumericField(fields, "ppg_max", metrics.getPpgMax());
-        addNumericField(fields, "ppg_std_dev", metrics.getPpgStdDev());
-        addNumericField(fields, "ppg_variance", metrics.getPpgVariance());
-        addNumericField(fields, "activity_mean", metrics.getActivityMean());
-        addNumericField(fields, "activity_max", metrics.getActivityMax());
-        addNumericField(fields, "activity_variance", metrics.getActivityVariance());
-        addNumericField(fields, "valid_samples", metrics.getValidSamples());
-        addNumericField(fields, "outlier_samples", metrics.getOutlierSamples());
+        addDoubleField(fields, "hrv_sdnn",               metrics.getHrvSdnn());
+        addDoubleField(fields, "hrv_rmssd",              metrics.getHrvRmssd());
+        addDoubleField(fields, "hrv_lf_hf",              metrics.getHrvLfHf());
+        addDoubleField(fields, "vascular_index",         metrics.getVascularIndex());
+        addDoubleField(fields, "perfusion_index",        metrics.getPerfusionIndex());
+        addDoubleField(fields, "signal_quality_score",   metrics.getSignalQualityScore());
+        addStringField(fields, "signal_quality_label",   metrics.getSignalQualityLabel());
+        addDoubleField(fields, "stress_index",           metrics.getStressIndex());
+        addStringField(fields, "stress_level",           metrics.getStressLevel());
+        addDoubleField(fields, "ppg_mean",               metrics.getPpgMean());
+        addDoubleField(fields, "ppg_min",                metrics.getPpgMin());
+        addDoubleField(fields, "ppg_max",                metrics.getPpgMax());
+        addDoubleField(fields, "ppg_std_dev",            metrics.getPpgStdDev());
+        addDoubleField(fields, "ppg_variance",           metrics.getPpgVariance());
+        addDoubleField(fields, "activity_mean",          metrics.getActivityMean());
+        addDoubleField(fields, "activity_max",           metrics.getActivityMax());
+        addDoubleField(fields, "activity_variance",      metrics.getActivityVariance());
+        addLongField(fields,   "valid_samples",          metrics.getValidSamples());
+        addLongField(fields,   "outlier_samples",        metrics.getOutlierSamples());
 
         if (fields.isEmpty()) {
+            log.warn("No valid fields to write for patient {}", metrics.getPatientId());
             return null;
         }
 
-        StringJoiner line = new StringJoiner(",");
-        line.add("vitals")
-            .add("patient_id=" + escapeTag(metrics.getPatientId() != null ? metrics.getPatientId() : "unknown"))
-            .add("device_id=" + escapeTag(metrics.getDeviceId() != null ? metrics.getDeviceId() : "unknown"))
-            .add(" " + String.join(",", fields) + " " + epochNanos);
+        String patientId = sanitizeTag(metrics.getPatientId(), "unknown");
+        String deviceId  = sanitizeTag(metrics.getDeviceId(),  "unknown");
 
-        return line.toString();
+        // Format strict InfluxDB Line Protocol :
+        // measurement,tag1=val1,tag2=val2 field1=v1,field2=v2 timestamp
+        // AUCUN espace dans la section tags, UN SEUL espace avant les fields
+        return "vitals"
+            + ",patientId=" + patientId
+            + ",deviceId="  + deviceId
+                + " "
+                + String.join(",", fields)
+                + " " + epochNanos;
     }
 
-    private void addNumericField(List<String> fields, String name, Number value) {
-        if (value != null) {
-            fields.add(name + "=" + value);
-        }
+    // --- helpers fields ---
+
+    /** Ajoute un champ entier avec suffixe 'i' (obligatoire pour InfluxDB integer) */
+    private void addLongField(List<String> fields, String name, Number value) {
+        if (value == null) return;
+        long v = value.longValue();
+        fields.add(name + "=" + v + "i");
+    }
+
+    /** Ajoute un champ flottant, ignore NaN et Infinite */
+    private void addDoubleField(List<String> fields, String name, Number value) {
+        if (value == null) return;
+        double v = value.doubleValue();
+        if (Double.isNaN(v) || Double.isInfinite(v)) return;
+        fields.add(name + "=" + v);
     }
 
     private void addStringField(List<String> fields, String name, String value) {
         if (value != null && !value.isBlank()) {
-            fields.add(name + "=\"" + escapeField(value) + "\"");
+            fields.add(name + "=\"" + escapeFieldString(value) + "\"");
         }
     }
 
-    private String escapeTag(String value) {
-        return value.replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=");
+    // --- helpers tags ---
+
+    /**
+     * Nettoie une valeur de tag pour InfluxDB :
+     * - trim des espaces en bord
+     * - remplace espaces internes, virgules et '=' par '_'
+     * (ces caractères doivent être échappés en Line Protocol ; on préfère les supprimer)
+     */
+    private String sanitizeTag(String value, String fallback) {
+        if (value == null) return fallback;
+        String cleaned = value.trim().replaceAll("[\\s,=]", "_");
+        return cleaned.isEmpty() ? fallback : cleaned;
     }
 
-    private String escapeField(String value) {
+    private String escapeFieldString(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
+    // --- misc ---
+
     private String stripTrailingSlash(String value) {
-        if (value == null || value.isBlank()) {
-            return "http://localhost:8088";
-        }
+        if (value == null || value.isBlank()) return "http://localhost:8088";
         return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 

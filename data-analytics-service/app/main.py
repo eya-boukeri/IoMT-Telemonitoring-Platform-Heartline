@@ -40,7 +40,40 @@ def main():
                 logger.info(f"Traitement du patient: {patient_id}")
                 signal = influx_reader.get_ppg_window(patient_id, QUERY_WINDOW_SECONDS)
                 logger.info(f"Signal pour {patient_id}: {len(signal) if signal else 0} points")
-                if not signal or len(signal) < 10:   # minimum de points requis (réduit pour les tests)
+
+                # Fallback rule-based: déclenche une alerte en cas de FC critique
+                # même quand la fenêtre PPG est trop courte pour le modèle ML.
+                try:
+                    heart_rates = influx_reader.get_metric_window(patient_id, "heartRate", QUERY_WINDOW_SECONDS)
+                except Exception as e:
+                    logger.error(f"Erreur lecture heartRate {patient_id}: {e}")
+                    heart_rates = []
+
+                if heart_rates:
+                    hr_max = max(heart_rates)
+                    hr_min = min(heart_rates)
+                    now = time.monotonic()
+                    if (hr_max >= 120 or hr_min <= 45) and (now - last_alert.get(patient_id, 0) >= COOLDOWN_SECONDS):
+                        severity = 'CRITICAL' if (hr_max >= 140 or hr_min <= 40) else 'WARNING'
+                        priority = 'URGENT' if severity == 'CRITICAL' else 'HIGH'
+                        alert = {
+                            'alertId': None,
+                            'patientId': patient_id,
+                            'timestamp': datetime.utcnow().isoformat() + 'Z',
+                            'alertType': 'anomaly',
+                            'severity': severity,
+                            'priority': priority,
+                            'message': f'Heart-rate rule triggered for patient {patient_id} (min={hr_min:.1f}, max={hr_max:.1f})',
+                            'detectionScore': 1.0,
+                            'value': 1,
+                            'confidence': 1.0,
+                            'ml_model_version': model.version
+                        }
+                        if send_alert(producer, TOPIC_OUT, alert):
+                            last_alert[patient_id] = now
+                            logger.info(f"Alerte rule-based envoyée pour {patient_id}")
+
+                if not signal or len(signal) < 3:   # minimum adapté aux points agrégés Influx
                     continue
 
                 # Extraction des features
@@ -64,7 +97,7 @@ def main():
                         alert = {
                             'alertId': None,
                             'patientId': patient_id,
-                            'timestamp': datetime.utcnow().isoformat(),
+                            'timestamp': datetime.utcnow().isoformat() + 'Z',
                             'alertType': 'anomaly',
                             'severity': 'WARNING' if confidence < 0.9 else 'CRITICAL',
                             'priority': 'HIGH' if confidence < 0.9 else 'URGENT',
