@@ -1,5 +1,6 @@
 package com.medtech.ingestion.service;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -10,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medtech.ingestion.model.RawSignal;
@@ -90,18 +90,34 @@ public class RawSignalService {
         rawSignalRepository.deleteOlderThan(cutoffDate);
     }
 
-    private String normalizeJsonPayload(String rawPayload) {
+    private String normalizeJsonPayload(String payload) {
+    if (payload == null || payload.isEmpty()) {
+        throw new IllegalArgumentException("Payload is empty");
+    }
+    String cleanPayload = payload.trim().replaceFirst("^\uFEFF", "");
+    
+    // Tenter de parser directement
+    try {
+        JsonNode node = objectMapper.readTree(cleanPayload);
+        return objectMapper.writeValueAsString(node);
+    } catch (IOException e) {
+        // Si échec, tenter de réparer les clés sans guillemets
+        String repaired = repairJsonWithoutQuotedKeys(cleanPayload);
         try {
-            JsonNode node = objectMapper.readTree(rawPayload);
+            JsonNode node = objectMapper.readTree(repaired);
             return objectMapper.writeValueAsString(node);
-        } catch (JsonProcessingException ex) {
-            LOGGER.warn("rawPayload is not valid JSON, storing it as a JSON string");
-
-            try {
-                return objectMapper.writeValueAsString(rawPayload.trim());
-            } catch (JsonProcessingException serializationEx) {
-                throw new IllegalArgumentException("rawPayload could not be serialized", serializationEx);
-            }
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to parse JSON payload even after repair: " + cleanPayload, ex);
         }
     }
+}
+
+private String repairJsonWithoutQuotedKeys(String input) {
+    // Ajouter des guillemets autour des clés si elles n'en ont pas
+    // Exemple: {patientId:value} -> {"patientId":value}
+    // On utilise une regex simple pour trouver les clés non quotées avant les ':'
+    String regex = "(\\{|,)\\s*([a-zA-Z0-9_]+)\\s*:";
+    String replacement = "$1\"$2\":";
+    return input.replaceAll(regex, replacement);
+}
 }

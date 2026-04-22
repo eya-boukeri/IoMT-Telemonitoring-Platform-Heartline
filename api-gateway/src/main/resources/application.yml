@@ -5,26 +5,20 @@ spring:
   application:
     name: api-gateway
 
-  # ── Base de données R2DBC (reactive) ─────────────────────────────────────────
   r2dbc:
     url: r2dbc:postgresql://postgres:5432/ingestion_db
     username: postgres
     password: postgres
 
-  # ── Sécurité OAuth2 Keycloak ─────────────────────────────────────────────────
   security:
     oauth2:
       resourceserver:
         jwt:
-          # jwk-set-uri direct → evite conflit localhost:8180 vs keycloak:8080
           issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://keycloak:8080/realms/iot-sante}
           jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:http://keycloak:8080/realms/iot-sante/protocol/openid-connect/certs}
 
-  # ── Spring Cloud Gateway ──────────────────────────────────────────────────────
   cloud:
     gateway:
-
-      # CORS global
       globalcors:
         cors-configurations:
           '[/**]':
@@ -37,14 +31,11 @@ spring:
             allowCredentials: true
             maxAge: 3600
 
-      # Timeouts HTTP client
       httpclient:
-        connect-timeout: 5000   # 5 secondes
+        connect-timeout: 5000
         response-timeout: 30s
 
       routes:
-
-        # ── PUBLIC : health sans token ──────────────────────────────────────────
         - id: health-public
           uri: http://localhost:8080
           predicates:
@@ -52,13 +43,11 @@ spring:
           filters:
             - SetPath=/actuator/health
 
-        # ── ROLE_MEDECIN : biosignaux patients ──────────────────────────────────
         - id: vitals-management
           uri: http://vitals-management:9090
           predicates:
             - Path=/api/vitals/**
 
-        # ── ROLE_DEVICE : ingestion depuis smartwatch ───────────────────────────
         - id: ingestion-service
           uri: http://ingestion-service:8081
           predicates:
@@ -66,7 +55,6 @@ spring:
           filters:
             - RewritePath=/api/ingestion/(?<segment>.*), /${segment}
 
-        # ── ROLE_MEDECIN : analytics et anomalies ──────────────────────────────
         - id: data-analytics
           uri: http://data-analytics:8085
           predicates:
@@ -74,7 +62,6 @@ spring:
           filters:
             - RewritePath=/api/analytics/(?<segment>.*), /${segment}
 
-        # ── ROLE_MEDECIN : alertes ──────────────────────────────────────────────
         - id: alert-service
           uri: http://alert-service:8082
           predicates:
@@ -82,13 +69,11 @@ spring:
           filters:
             - RewritePath=/api/alerts/(?<segment>.*), /${segment}
 
-        # ── ROLE_MEDECIN : notifications (SSE + stats) ───────────────────────
         - id: notification-service
           uri: http://notification-service:9095
           predicates:
             - Path=/api/notifications/**
 
-        # ── ROLE_MEDECIN : dashboard ────────────────────────────────────────────
         - id: dashboard-service
           uri: http://dashboard-service:5173
           predicates:
@@ -96,7 +81,6 @@ spring:
           filters:
             - RewritePath=/api/dashboard/(?<segment>.*), /${segment}
 
-# ── Actuator ──────────────────────────────────────────────────────────────────
 management:
   endpoints:
     web:
@@ -106,7 +90,6 @@ management:
     health:
       show-details: always
 
-# ── Logging ───────────────────────────────────────────────────────────────────
 logging:
   level:
     com.medtech.gateway: DEBUG

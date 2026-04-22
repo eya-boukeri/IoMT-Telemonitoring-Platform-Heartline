@@ -179,3 +179,33 @@ CREATE TABLE IF NOT EXISTS ingestion_metrics (
 
 CREATE INDEX IF NOT EXISTS idx_ingestion_metrics_patient_window
     ON ingestion_metrics (patient_id, window_end DESC);
+
+
+
+
+-- ============================================================
+-- Base de données : notification_db
+-- Tables pour le service de notification (alertes médicales)
+-- ============================================================
+
+\c notification_db;
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ------------------------------------------------------------
+-- Table des alertes/notifications
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notifications (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    patient_id    VARCHAR(255) NOT NULL,
+    type          VARCHAR(100) NOT NULL,        -- ex: 'ANOMALY', 'CRITICAL', 'INFO'
+    message       TEXT NOT NULL,
+    severity      VARCHAR(50) CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+    timestamp     TIMESTAMPTZ NOT NULL,         -- moment où l'alerte a été générée
+    lu            BOOLEAN DEFAULT FALSE,        -- si l'alerte a été lue par le médecin
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_patient_id ON notifications(patient_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_timestamp ON notifications(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_severity ON notifications(severity);

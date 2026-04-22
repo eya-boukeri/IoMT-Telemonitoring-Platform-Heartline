@@ -20,13 +20,19 @@ public class EmailService {
     @Autowired
     private JavaMailSender mailSender;
 
+    // Ancienne propriété (utilisée uniquement pour l'auth SMTP, plus pour l'en-tête From)
+    // Nous la gardons pour d'éventuels besoins, mais elle n'est plus utilisée dans setFrom.
     @Value("${spring.mail.username}")
-    private String fromEmail;
+    private String smtpUsername;
+
+    // Nouvelle propriété : adresse expéditrice validée dans Brevo
+    @Value("${notification.email.sender:farah.attia21@gmail.com}")
+    private String senderAddress;
 
     @Async
     public void sendAlertEmail(Alert alert, NotificationRecipient recipient) {
-        if (!hasText(fromEmail)) {
-            log.warn("Email channel disabled: spring.mail.username is empty");
+        if (!hasText(senderAddress)) {
+            log.warn("Email channel disabled: notification.email.sender is empty");
             return;
         }
 
@@ -41,7 +47,7 @@ public class EmailService {
         }
 
         String safeTo      = recipient.getEmail().trim();
-        String safeFrom    = hasText(fromEmail) ? fromEmail.trim() : "noreply@medtech.tn";
+        String safeFrom    = senderAddress.trim();
         String safeSubject = String.format("[%s] Alerte: %s", 
                 alert.getSeverity() != null ? alert.getSeverity() : "INCONNUE",
                 alert.getAlertType() != null ? alert.getAlertType() : "Médicale");
@@ -55,7 +61,7 @@ public class EmailService {
             helper.setSubject(safeSubject);
             helper.setText(safeBody, true);
             mailSender.send(message);
-            log.info("📧 Email sent to {}", safeTo);
+            log.info("📧 Email sent to {} from {}", safeTo, safeFrom);
         } catch (Exception e) {
             log.error("❌ Email failed sending to {}", safeTo, e);
         }
@@ -66,7 +72,6 @@ public class EmailService {
     }
 
     private String buildEmailContent(Alert alert) {
-        // Les champs peuvent être null, String.format les convertit en "null" – acceptable
         return String.format("""
             <h2>🚨 Alerte Médicale</h2>
             <p><strong>Patient:</strong> %s</p>

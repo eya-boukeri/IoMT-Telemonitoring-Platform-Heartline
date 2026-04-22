@@ -144,6 +144,8 @@ public class MqttConfig {
             String topic = toStringHeader(message, MqttHeaders.RECEIVED_TOPIC, inputTopic);
             String payload = toPayloadString(message.getPayload());
 
+            LOGGER.info("🔍 MQTT Raw payload received - topic={} payload={}", topic, payload);
+
             if (payload == null || payload.isBlank()) {
                 LOGGER.warn("MQTT payload empty, skipped - topic={}", topic);
                 return;
@@ -283,6 +285,15 @@ public class MqttConfig {
     private String normalizeJsonString(String payload) {
         if (payload == null || payload.isBlank()) {
             return payload;
+        }
+
+        // Debug: log the raw bytes
+        try {
+            byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
+            LOGGER.info("🔍 Raw bytes length: {}, first 20 bytes: {}", bytes.length,
+                java.util.Arrays.toString(java.util.Arrays.copyOf(bytes, Math.min(20, bytes.length))));
+        } catch (Exception e) {
+            LOGGER.warn("Failed to log raw bytes", e);
         }
 
         try {

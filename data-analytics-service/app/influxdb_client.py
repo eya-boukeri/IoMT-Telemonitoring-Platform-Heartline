@@ -13,15 +13,17 @@ class PPGInfluxReader:
     def get_patient_ids(self):
         """Liste des patientId ayant des données PPG dans la dernière heure"""
         query = f'''
-        import "influxdata/influxdb/v1"
-        v1.measurementTagValues(bucket: "{self.bucket}", measurement: "vitals", tag: "patientId")
+        from(bucket: "{self.bucket}")
+          |> range(start: -1h)
+          |> filter(fn: (r) => r._measurement == "vitals")
+          |> distinct(column: "patientId")
         '''
         tables = self.client.query_api().query(query, org=self.org)
         patient_ids = []
         for table in tables:
             for record in table.records:
                 patient_ids.append(record.get_value())
-        return patient_ids
+        return list(set(patient_ids))  # supprimer les doublons
 
     def get_devices(self):
         """Alias de compatibilité vers get_patient_ids()."""

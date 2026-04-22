@@ -37,8 +37,10 @@ def main():
                 continue
 
             for patient_id in patient_ids:
+                logger.info(f"Traitement du patient: {patient_id}")
                 signal = influx_reader.get_ppg_window(patient_id, QUERY_WINDOW_SECONDS)
-                if not signal or len(signal) < 100:   # minimum de points requis
+                logger.info(f"Signal pour {patient_id}: {len(signal) if signal else 0} points")
+                if not signal or len(signal) < 10:   # minimum de points requis (réduit pour les tests)
                     continue
 
                 # Extraction des features

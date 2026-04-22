@@ -117,10 +117,10 @@ public class IngestionInfluxService {
         }
 
         StringJoiner line = new StringJoiner(",");
-        line.add("ingestion_metrics")
+        line.add("vitals")
             .add("patient_id=" + escapeTag(metrics.getPatientId() != null ? metrics.getPatientId() : "unknown"))
             .add("device_id=" + escapeTag(metrics.getDeviceId() != null ? metrics.getDeviceId() : "unknown"))
-            .add(String.join(",", fields) + " " + epochNanos);
+            .add(" " + String.join(",", fields) + " " + epochNanos);
 
         return line.toString();
     }
