@@ -125,24 +125,35 @@ public class AggregationService {
 
         List<Double> magnitudes = computeMagnitude(x, y, z);
 
-        double ppgMean = mean(ppg);
-        double ppgVariance = variance(ppg, ppgMean);
+        // Lightweight aggregation stage: smooth kept/filtered PPG with moving average
+        // before computing persisted aggregate statistics.
+        List<Double> aggregatedPpg = ppg.isEmpty()
+            ? ppg
+            : movingAverage(ppg, Math.min(7, Math.max(3, ppg.size() / 10)));
+
+        double ppgMean = mean(aggregatedPpg);
+        double ppgVariance = variance(aggregatedPpg, ppgMean);
         double activityMean = mean(magnitudes);
 
-        HeartRateEstimation hr = estimateHeartRate(ppg, window.windowStart(), window.windowEnd());
+        HeartRateEstimation hr = estimateHeartRate(aggregatedPpg, window.windowStart(), window.windowEnd());
 
         AggregatedData aggregatedData = new AggregatedData();
         aggregatedData.setPatientId(window.patientId());
         aggregatedData.setDeviceId(window.deviceId());
         aggregatedData.setWindowStart(window.windowStart());
         aggregatedData.setWindowEnd(window.windowEnd());
-        aggregatedData.setSampleCount(ppg.size());
+        aggregatedData.setSampleCount(aggregatedPpg.size());
 
         aggregatedData.setPpgMean(ppgMean);
-        aggregatedData.setPpgMin(min(ppg));
-        aggregatedData.setPpgMax(max(ppg));
+        aggregatedData.setPpgMin(min(aggregatedPpg));
+        aggregatedData.setPpgMax(max(aggregatedPpg));
         aggregatedData.setPpgVariance(ppgVariance);
         aggregatedData.setPpgStdDev(Math.sqrt(ppgVariance));
+        aggregatedData.setPpgFilteredMean(ppgMean);
+        aggregatedData.setPpgFilteredMin(aggregatedData.getPpgMin());
+        aggregatedData.setPpgFilteredMax(aggregatedData.getPpgMax());
+        aggregatedData.setPpgFilteredVariance(ppgVariance);
+        aggregatedData.setPpgFilteredStdDev(aggregatedData.getPpgStdDev());
 
         aggregatedData.setEstimatedHeartRate(hr.heartRate());
         aggregatedData.setHeartRateConfidence(hr.confidence());
@@ -152,10 +163,10 @@ public class AggregationService {
         aggregatedData.setActivityVariance(variance(magnitudes, activityMean));
 
         aggregatedData.setSignalQuality(weight == 0 ? 0.0 : weightedSignalQuality / weight);
-        aggregatedData.setValidSamples(ppg.size());
+        aggregatedData.setValidSamples(aggregatedPpg.size());
         aggregatedData.setOutlierSamples(outlierSamples);
 
-        persistIngestionMetrics(window, aggregatedData, ppg, hr);
+        persistIngestionMetrics(window, aggregatedData, aggregatedPpg, hr);
 
         return aggregatedData;
     }

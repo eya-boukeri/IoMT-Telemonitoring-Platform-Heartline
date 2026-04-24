@@ -59,7 +59,12 @@ public class KafkaAggregatedConsumer {
             vital.setHeartRate(estimatedHeartRate);
             vital.setHeartRateVariability(readDouble(root, "ppgStdDev"));
 
-            vital.setPpgGreenAverage(readDouble(root, "ppgMean"));
+            Double filteredMean = firstNonNull(
+                readDouble(root, "ppgFilteredMean"),
+                readDouble(root, "ppgMean")
+            );
+            vital.setPpgFilteredSignal(filteredMean);
+            vital.setPpgGreenAverage(filteredMean);
             vital.setPpgGreenMin(readDouble(root, "ppgMin"));
             vital.setPpgGreenMax(readDouble(root, "ppgMax"));
             vital.setPpgDataPoints(readInteger(root, "sampleCount"));
@@ -237,5 +242,9 @@ public class KafkaAggregatedConsumer {
             return "fair";
         }
         return "poor";
+    }
+
+    private <T> T firstNonNull(T first, T second) {
+        return first != null ? first : second;
     }
 }

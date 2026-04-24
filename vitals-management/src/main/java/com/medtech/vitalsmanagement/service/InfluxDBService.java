@@ -100,6 +100,10 @@ public class InfluxDBService {
             point.addField("ppgGreenAverage", vitalData.getPpgGreenAverage());
             hasField = true;
         }
+        if (vitalData.getPpgFilteredSignal() != null) {
+            point.addField("ppgFilteredSignal", vitalData.getPpgFilteredSignal());
+            hasField = true;
+        }
         if (vitalData.getPpgRedMin() != null) {
             point.addField("ppgRedMin", vitalData.getPpgRedMin());
             hasField = true;
@@ -155,7 +159,7 @@ public class InfluxDBService {
             log.debug("InfluxDB: write success for patientId={} timestamp={}",
                     vitalData.getPatientId(), timestamp);
             return true;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("InfluxDB: write failed for payload: {}", vitalData, e);
             return false;
         }
@@ -181,7 +185,7 @@ public class InfluxDBService {
         try {
             writeApi.writePoint(point);
             log.debug("InfluxDB: raw payload write success topic={} timestamp={}", topic, timestamp);
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("InfluxDB: raw payload write failed topic={} payload={}", topic, payload, e);
         }
     }
@@ -260,6 +264,7 @@ public class InfluxDBService {
         Map<String, VitalStat> stats = new HashMap<>();
         stats.put("heartRate", calculateStats(history.stream().map(VitalData::getHeartRate).toList()));
         stats.put("ppgGreenAverage", calculateStats(history.stream().map(VitalData::getPpgGreenAverage).toList()));
+        stats.put("ppgFilteredSignal", calculateStats(history.stream().map(VitalData::getPpgFilteredSignal).toList()));
         stats.put("ppgRedAverage", calculateStats(history.stream().map(VitalData::getPpgRedAverage).toList()));
         stats.put("accelerometerMagnitudeAverage", calculateStats(history.stream().map(VitalData::getAccelerometerMagnitudeAverage).toList()));
 
@@ -329,7 +334,40 @@ public class InfluxDBService {
         data.setHeartRate(toDouble(record.getValueByKey("heartRate")));
         data.setBloodPressureSystolic(toDouble(record.getValueByKey("bloodPressureSystolic")));
         data.setBloodPressureDiastolic(toDouble(record.getValueByKey("bloodPressureDiastolic")));
+        data.setPpgGreenMin(toDouble(record.getValueByKey("ppgGreenMin")));
+        data.setPpgGreenMax(toDouble(record.getValueByKey("ppgGreenMax")));
+        data.setPpgGreenAverage(toDouble(record.getValueByKey("ppgGreenAverage")));
+        data.setPpgFilteredSignal(firstNonNull(
+            toDouble(record.getValueByKey("ppgFilteredSignal")),
+            toDouble(record.getValueByKey("ppgGreenAverage"))
+        ));
+        data.setPpgDataPoints(toInteger(record.getValueByKey("ppgDataPoints")));
+        data.setSignalQualityScore(toDouble(record.getValueByKey("signalQualityScore")));
+        data.setAccelerometerMagnitudeAverage(toDouble(record.getValueByKey("accelerometerMagnitudeAverage")));
+        data.setAccelerometerMagnitudeMax(toDouble(record.getValueByKey("accelerometerMagnitudeMax")));
+        data.setAccelerometerVariance(toDouble(record.getValueByKey("accelerometerVariance")));
         return data;
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (!(value instanceof String text)) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(text);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private <T> T firstNonNull(T first, T second) {
+        return first != null ? first : second;
     }
 
     private Double toDouble(Object value) {
@@ -339,8 +377,11 @@ public class InfluxDBService {
         if (value instanceof Number number) {
             return number.doubleValue();
         }
+        if (!(value instanceof String text)) {
+            return null;
+        }
         try {
-            return Double.parseDouble(value.toString());
+            return Double.parseDouble(text);
         } catch (NumberFormatException ex) {
             return null;
         }

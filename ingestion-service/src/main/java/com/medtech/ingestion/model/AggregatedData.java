@@ -22,6 +22,13 @@ public class AggregatedData {
     private double ppgMax;
     private double ppgStdDev;
     private double ppgVariance;
+
+    // Explicit filtered PPG statistics (band-pass in ingestion)
+    private double ppgFilteredMean;
+    private double ppgFilteredMin;
+    private double ppgFilteredMax;
+    private double ppgFilteredStdDev;
+    private double ppgFilteredVariance;
     
     // Heart rate estimation
     private Double estimatedHeartRate;

@@ -26,7 +26,7 @@ public class SignalProcessingService {
     private final ObjectMapper objectMapper;
     private final KafkaProducerService kafkaProducerService;
 
-    @Value("${processing.filter.lowpass-cutoff:10}")
+    @Value("${processing.filter.lowpass-cutoff:5}")
     private double lowpassCutoff;
 
     @Value("${processing.filter.highpass-cutoff:0.5}")
@@ -322,11 +322,16 @@ public class SignalProcessingService {
         List<Double> alignedY = align(accY, size);
         List<Double> alignedZ = align(accZ, size);
 
+        // Remove gravity/static component so motion threshold targets dynamic movement only.
+        double meanX = mean(alignedX);
+        double meanY = mean(alignedY);
+        double meanZ = mean(alignedZ);
+
         List<Double> motionMagnitude = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            double x = alignedX.get(i);
-            double y = alignedY.get(i);
-            double z = alignedZ.get(i);
+            double x = alignedX.get(i) - meanX;
+            double y = alignedY.get(i) - meanY;
+            double z = alignedZ.get(i) - meanZ;
             motionMagnitude.add(Math.sqrt((x * x) + (y * y) + (z * z)));
         }
 
@@ -403,6 +408,11 @@ public class SignalProcessingService {
     private List<Double> applyBandPassFilter(List<Double> values) {
         if (values == null || values.isEmpty()) {
             return Collections.emptyList();
+        }
+
+        // MQTT packets may carry 1 sample. Keep it as-is instead of forcing a 0-valued band-pass output.
+        if (values.size() < 3) {
+            return new ArrayList<>(values);
         }
 
         int lowWindow = Math.max(3, (int) Math.round(samplingRate / Math.max(0.1, lowpassCutoff)));

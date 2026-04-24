@@ -48,6 +48,9 @@ public class VitalData {
     
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Double ppgGreenAverage; // average green PPG value
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Double ppgFilteredSignal; // filtered PPG representative value (ingestion band-pass)
     
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Double ppgRedMin; // minimum red PPG value

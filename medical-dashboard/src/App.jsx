@@ -10,13 +10,17 @@ const NOTIFICATION_API_ROOT = import.meta.env.VITE_NOTIFICATION_API_URL ||
                               import.meta.env.REACT_APP_NOTIFICATION_API_URL || 
                               (window.location.hostname === 'localhost' ? 'http://localhost:9095/api' : '/api');
 const NOTIFICATION_SSE_BASE_URL = `${NOTIFICATION_API_ROOT}/notifications`;
-const MAX_POINTS = 50;
+const MAX_POINTS = 250;
 const AUTO_UPDATE_MS = 3000;
 const MAX_ALERTS = 8;
 const FALLBACK_PATIENT_ID = 'patient-001';
 
 const DEFAULT_METRICS = {
-  ppgSignal: 1250,
+  ppgSignal: null,
+  ppgGreenMin: 1220,
+  ppgGreenMax: 1280,
+  signalQualityScore: null,
+  ppgDataPoints: null,
 };
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -27,38 +31,49 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const randomFloat = (min, max) => Math.random() * (max - min) + min;
+const toTimestampMs = (timestamp) => {
+  if (!timestamp) return null;
+  const parsed = new Date(timestamp).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 const buildVitalPoint = (raw, previousPoint) => {
   const previous = previousPoint || DEFAULT_METRICS;
   const base = raw || {};
   const timestamp = base.timestamp || new Date().toISOString();
 
-  const ppgSignal = clamp(
+  const resolvedPpg =
+    toNumber(base.ppgFilteredSignal) ??
+    toNumber(base.ppgFilteredMean) ??
     toNumber(base.ppgSignal) ??
-      toNumber(base.ppg) ??
-      toNumber(base.ppgGreenAverage) ??
-      toNumber(base.ppgMean) ??
-      previous.ppgSignal ??
-      DEFAULT_METRICS.ppgSignal,
-    0,
-    6000
-  );
+    toNumber(base.ppg) ??
+    toNumber(base.ppgGreenAverage) ??
+    toNumber(base.ppgMean) ??
+    DEFAULT_METRICS.ppgSignal;
+
+  const ppgSignal = resolvedPpg === null ? null : clamp(resolvedPpg, 0, 6000);
 
   return {
     timestamp,
     ppgSignal,
-  };
-};
-
-const evolveVitalPoint = (previousPoint) => {
-  const prev = previousPoint || DEFAULT_METRICS;
-  const timestamp = new Date().toISOString();
-  const ppgSignal = clamp((prev.ppgSignal || DEFAULT_METRICS.ppgSignal) + randomFloat(-45, 45), 700, 3200);
-
-  return {
-    timestamp,
-    ppgSignal,
+    ppgGreenMin: clamp(
+      toNumber(base.ppgGreenMin) ??
+        toNumber(base.ppgMin) ??
+        previous.ppgGreenMin ??
+        (ppgSignal ?? DEFAULT_METRICS.ppgGreenMin) - 20,
+      0,
+      6000
+    ),
+    ppgGreenMax: clamp(
+      toNumber(base.ppgGreenMax) ??
+        toNumber(base.ppgMax) ??
+        previous.ppgGreenMax ??
+        (ppgSignal ?? DEFAULT_METRICS.ppgGreenMax) + 20,
+      0,
+      6000
+    ),
+    ppgDataPoints: toNumber(base.ppgDataPoints) ?? previous.ppgDataPoints ?? null,
+    signalQualityScore: toNumber(base.signalQualityScore) ?? toNumber(base.signalQuality) ?? previous.signalQualityScore ?? null,
   };
 };
 
@@ -139,18 +154,36 @@ function App() {
     });
   }, []);
 
-  const pushVitalPoint = useCallback((rawPoint, synthetic = false) => {
+  const pushVitalPoint = useCallback((rawPoint) => {
     setVitalData((previous) => {
       const previousPoint = previous.length ? previous[previous.length - 1] : null;
-      const nextPoint = synthetic ? evolveVitalPoint(previousPoint) : buildVitalPoint(rawPoint, previousPoint);
+      const nextPoint = buildVitalPoint(rawPoint, previousPoint);
 
+      if (nextPoint.ppgSignal === null) {
+        return previous;
+      }
+
+      // Keep a strictly increasing timeline to avoid chart compression caused by
+      // historical SSE events arriving after fresh points.
+      const nextMs = toTimestampMs(nextPoint.timestamp);
+      const previousMs = toTimestampMs(previousPoint?.timestamp);
+      
+      // Reject if timestamps are not strictly ascending
+      if (previousMs !== null && nextMs !== null && nextMs <= previousMs) {
+        return previous;
+      }
+
+      // Reject exact duplicates
       if (previousPoint && previousPoint.timestamp === nextPoint.timestamp) {
         return previous;
       }
 
       lastPointAtRef.current = Date.now();
       setLastRefreshAt(nextPoint.timestamp);
-      return [...previous, nextPoint].slice(-MAX_POINTS);
+      
+      // Ensure strict FIFO: append new point and trim from start if needed
+      const result = [...previous, nextPoint];
+      return result.length > MAX_POINTS ? result.slice(-MAX_POINTS) : result;
     });
   }, []);
 
@@ -185,13 +218,39 @@ function App() {
         return;
       }
 
-      const normalized = data.reduce((accumulator, point) => {
+      // Sort incoming data strictly ascending by timestamp to prevent chart compression
+      const sorted = [...data].sort((a, b) => {
+        const aMs = toTimestampMs(a.timestamp);
+        const bMs = toTimestampMs(b.timestamp);
+        if (aMs === null) return 1;
+        if (bMs === null) return -1;
+        return aMs - bMs;
+      });
+
+      const normalized = sorted.reduce((accumulator, point) => {
         const previous = accumulator.length ? accumulator[accumulator.length - 1] : null;
         accumulator.push(buildVitalPoint(point, previous));
         return accumulator;
       }, []);
 
-      setVitalData(normalized.slice(-MAX_POINTS));
+      // Merge with existing data: only add batch points that are older than our current data
+      setVitalData((existing) => {
+        if (!existing.length) {
+          return normalized.slice(-MAX_POINTS);
+        }
+
+        // If batch data is all newer than existing, use it directly
+        const lastExistingMs = toTimestampMs(existing[existing.length - 1].timestamp);
+        const firstNewMs = toTimestampMs(normalized[0].timestamp);
+
+        if (firstNewMs > lastExistingMs) {
+          return normalized.slice(-MAX_POINTS);
+        }
+
+        // Otherwise, keep existing and ignore batch (SSE is fresher)
+        return existing;
+      });
+
       const latest = normalized[normalized.length - 1];
       if (latest) {
         lastPointAtRef.current = Date.now();
@@ -318,8 +377,6 @@ function App() {
         const latestFromApi = await fetchLatestPoint(selectedPatient);
         if (latestFromApi) {
           pushVitalPoint(latestFromApi);
-        } else {
-          pushVitalPoint(null, true);
         }
       }
     }, AUTO_UPDATE_MS);
@@ -328,13 +385,54 @@ function App() {
   }, [selectedPatient, fetchLatestPoint, fetchStats, pushVitalPoint]);
 
   const chartData = useMemo(
-    () =>
-      vitalData.slice(-MAX_POINTS).map((vital) => ({
-        time: formatTime(vital.timestamp),
-        ppgSignal: Number(vital.ppgSignal.toFixed(1)),
-      })),
+    () => {
+      const latest = vitalData.slice(-MAX_POINTS);
+      if (!latest.length) {
+        return [];
+      }
+
+      const firstTimestampMs = toTimestampMs(latest[0].timestamp) ?? Date.now();
+
+      return latest.map((vital, index) => {
+        if (vital.ppgSignal === null || vital.ppgSignal === undefined) {
+          return null;
+        }
+
+        const timestampMs = toTimestampMs(vital.timestamp);
+        const timeSec = timestampMs
+          ? (timestampMs - firstTimestampMs) / 1000
+          : index / 50;
+
+        return {
+          timeSec: Number(timeSec.toFixed(3)),
+          ppgFiltered: Number((vital.ppgSignal ?? 0).toFixed(2)),
+        };
+      }).filter(Boolean);
+    },
     [vitalData]
   );
+
+  const ppgDomain = useMemo(() => {
+    if (chartData.length < 2) {
+      return [-1, 1];
+    }
+
+    const values = chartData.map((point) => point.ppgFiltered);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      return [-1, 1];
+    }
+
+    const span = Math.max(max - min, 0.2);
+    const padding = span * 0.15;
+    return [Number((min - padding).toFixed(2)), Number((max + padding).toFixed(2))];
+  }, [chartData]);
+
+  const latestPoint = vitalData.length ? vitalData[vitalData.length - 1] : null;
+  const latestSignalQuality = latestPoint?.signalQualityScore;
+  const latestDataPoints = latestPoint?.ppgDataPoints;
 
   const tooltipStyle = {
     background: '#161b22',
@@ -383,7 +481,11 @@ function App() {
         <section className="hero-monitor panel">
           <div className="panel-head">
             <h2>Signal PPG</h2>
-            <p>{currentPatientLabel}</p>
+            <p>
+              {currentPatientLabel} · 
+              {latestDataPoints ? ` · ${latestDataPoints} points` : ''}
+              {Number.isFinite(latestSignalQuality) ? ` · qualité ${Math.round(latestSignalQuality)}%` : ''}
+            </p>
           </div>
 
           <div className="hero-graph">
@@ -392,18 +494,34 @@ function App() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
                   <CartesianGrid stroke="#1b2635" strokeDasharray="3 3" vertical={false} />
-                  <XAxis hide dataKey="time" />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
+                  <XAxis
+                    dataKey="timeSec"
+                    type="number"
+                    domain={['dataMin', 'dataMax']}
+                    tickFormatter={(value) => `${value.toFixed(1)}`}
+                    tick={{ fill: '#9fb3c8', fontSize: 11 }}
+                    label={{ value: 'Temps (s)', fill: '#9fb3c8', position: 'insideBottom', offset: -4 }}
+                  />
+                  <YAxis
+                    type="number"
+                    domain={ppgDomain}
+                    tickFormatter={(value) => value.toFixed(1)}
+                    tick={{ fill: '#9fb3c8', fontSize: 11 }}
+                    label={{ value: 'Intensite PPG', angle: -90, fill: '#9fb3c8', position: 'insideLeft' }}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelFormatter={(value) => `Temps: ${Number(value).toFixed(2)} s`}
+                    formatter={(value) => [`${Number(value).toFixed(2)}`, 'Amplitude PPG']}
+                  />
                   <Line
                     type="monotone"
-                    dataKey="ppgSignal"
+                    dataKey="ppgFiltered"
                     stroke="#2f81f7"
                     strokeWidth={2.5}
                     dot={false}
-                    isAnimationActive={true}
-                    animationDuration={650}
-                    name="PPG"
+                    isAnimationActive={false}
+                    name="Signal PPG filtre"
                   />
                 </LineChart>
               </ResponsiveContainer>

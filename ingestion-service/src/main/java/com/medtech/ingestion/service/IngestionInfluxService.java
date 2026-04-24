@@ -108,6 +108,11 @@ public class IngestionInfluxService {
         addDoubleField(fields, "ppg_max",                metrics.getPpgMax());
         addDoubleField(fields, "ppg_std_dev",            metrics.getPpgStdDev());
         addDoubleField(fields, "ppg_variance",           metrics.getPpgVariance());
+        addDoubleField(fields, "ppg_filtered_mean",      metrics.getPpgMean());
+        addDoubleField(fields, "ppg_filtered_min",       metrics.getPpgMin());
+        addDoubleField(fields, "ppg_filtered_max",       metrics.getPpgMax());
+        addDoubleField(fields, "ppg_filtered_std_dev",   metrics.getPpgStdDev());
+        addDoubleField(fields, "ppg_filtered_variance",  metrics.getPpgVariance());
         addDoubleField(fields, "activity_mean",          metrics.getActivityMean());
         addDoubleField(fields, "activity_max",           metrics.getActivityMax());
         addDoubleField(fields, "activity_variance",      metrics.getActivityVariance());
@@ -135,14 +140,14 @@ public class IngestionInfluxService {
 
     // --- helpers fields ---
 
-    /** Ajoute un champ entier avec suffixe 'i' (obligatoire pour InfluxDB integer) */
+    /** Add integer field with 'i' suffix required by InfluxDB line protocol. */
     private void addLongField(List<String> fields, String name, Number value) {
         if (value == null) return;
         long v = value.longValue();
         fields.add(name + "=" + v + "i");
     }
 
-    /** Ajoute un champ flottant, ignore NaN et Infinite */
+    /** Add floating-point field and skip NaN/Infinite values. */
     private void addDoubleField(List<String> fields, String name, Number value) {
         if (value == null) return;
         double v = value.doubleValue();
@@ -159,10 +164,9 @@ public class IngestionInfluxService {
     // --- helpers tags ---
 
     /**
-     * Nettoie une valeur de tag pour InfluxDB :
-     * - trim des espaces en bord
-     * - remplace espaces internes, virgules et '=' par '_'
-     * (ces caractères doivent être échappés en Line Protocol ; on préfère les supprimer)
+     * Sanitize an InfluxDB tag value:
+     * - trim outer spaces
+     * - replace spaces, commas, and '=' with '_'
      */
     private String sanitizeTag(String value, String fallback) {
         if (value == null) return fallback;
