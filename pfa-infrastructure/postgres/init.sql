@@ -182,6 +182,64 @@ CREATE INDEX IF NOT EXISTS idx_ingestion_metrics_patient_window
 
 
 
+-- ------------------------------------------------------------
+-- Snapshots d'anomalie (200 points bruts extraits lors d'une détection)
+-- Permet au médecin de revoir la courbe brute associée à chaque alerte.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS anomaly_snapshots (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    alert_id        VARCHAR(255) NOT NULL,
+    patient_id      VARCHAR(255) NOT NULL,
+    detected_at     TIMESTAMPTZ NOT NULL,
+    severity        VARCHAR(50),
+    confidence      DOUBLE PRECISION,
+    model_version   VARCHAR(100),
+    message         TEXT,
+    raw_data        JSONB,  -- Nullable for R2 storage (data stored in cloud when using R2)
+    -- R2 storage metadata fields
+    storage_provider VARCHAR(50),  -- 'cloudflare-r2', 'postgres', etc.
+    storage_bucket   VARCHAR(255), -- Bucket name for cloud storage
+    storage_key      VARCHAR(500), -- Object key/path in cloud storage
+    storage_etag     VARCHAR(255), -- ETag for integrity verification
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Migration: Add R2 storage columns to existing table if they don't exist
+DO $$
+BEGIN
+    -- Make raw_data nullable for R2 storage
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'anomaly_snapshots' AND column_name = 'raw_data'
+               AND is_nullable = 'NO') THEN
+        ALTER TABLE anomaly_snapshots ALTER COLUMN raw_data DROP NOT NULL;
+    END IF;
+
+    -- Add storage metadata columns if they don't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'anomaly_snapshots' AND column_name = 'storage_provider') THEN
+        ALTER TABLE anomaly_snapshots ADD COLUMN storage_provider VARCHAR(50);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'anomaly_snapshots' AND column_name = 'storage_bucket') THEN
+        ALTER TABLE anomaly_snapshots ADD COLUMN storage_bucket VARCHAR(255);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'anomaly_snapshots' AND column_name = 'storage_key') THEN
+        ALTER TABLE anomaly_snapshots ADD COLUMN storage_key VARCHAR(500);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'anomaly_snapshots' AND column_name = 'storage_etag') THEN
+        ALTER TABLE anomaly_snapshots ADD COLUMN storage_etag VARCHAR(255);
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_anomaly_snapshots_alert_id
+    ON anomaly_snapshots(alert_id);
+CREATE INDEX IF NOT EXISTS idx_anomaly_snapshots_patient
+    ON anomaly_snapshots(patient_id, detected_at DESC);
 
 -- ============================================================
 -- Base de données : notification_db

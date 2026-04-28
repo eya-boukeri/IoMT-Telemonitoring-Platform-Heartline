@@ -400,6 +400,22 @@
   border-bottom: 1px solid var(--border);
 }
 
+.schedule-item-button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding-top: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.schedule-item-button:hover {
+  transform: translateY(-1px);
+}
+
 .schedule-text {
   display: flex;
   flex-direction: column;
@@ -480,6 +496,228 @@
 .score-bars {
   display: grid;
   gap: 0.75rem;
+}
+
+/* Styles pour la visualisation du patient normal */
+.normal-patient-section {
+  margin-top: 2rem;
+}
+
+.normal-patient-viz {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.normal-patient-viz .panel-head {
+  margin-bottom: 1.5rem;
+}
+
+.normal-patient-viz .panel-head h2 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+}
+
+.normal-patient-viz .panel-head p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.viz-content {
+  display: grid;
+  gap: 2rem;
+}
+
+.chart-section {
+  background: var(--bg-row);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.chart-section h3 {
+  margin: 0 0 1rem 0;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.chart-container {
+  height: 200px;
+  margin-bottom: 1rem;
+}
+
+.chart-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.viz-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-secondary {
+  background: var(--bg-row);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.viz-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  max-width: 60%;
+}
+
+.loading-spinner {
+  text-align: center;
+  font-size: 2rem;
+  color: var(--blue-soft);
+  padding: 2rem;
+}
+
+/* Styles pour la visualisation du patient normal */
+.normal-patient-section {
+  margin-top: 2rem;
+}
+
+.normal-patient-viz {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.normal-patient-viz .panel-head {
+  margin-bottom: 1.5rem;
+}
+
+.normal-patient-viz .panel-head h2 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+}
+
+.normal-patient-viz .panel-head p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.connection-status {
+  margin-left: 1rem;
+  font-weight: bold;
+}
+
+.connection-status.connected {
+  color: #10b981;
+}
+
+.connection-status.disconnected {
+  color: #ef4444;
+}
+
+.viz-content {
+  display: grid;
+  gap: 2rem;
+}
+
+.chart-section {
+  background: var(--bg-row);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.chart-section h3 {
+  margin: 0 0 1rem 0;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.chart-container {
+  height: 200px;
+  margin-bottom: 1rem;
+}
+
+.chart-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.viz-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mode-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-mode {
+  background: var(--bg-row);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.btn-mode:hover {
+  background: var(--border);
+}
+
+.btn-mode.active {
+  background: var(--blue-strong);
+  color: #e9fbff;
+  border-color: var(--blue-strong);
+}
+
+.btn-secondary {
+  background: var(--bg-row);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.viz-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  max-width: 60%;
 }
 
 .score-bars div {
@@ -613,6 +851,62 @@
   color: #a0d4db;
   border: 1px solid rgba(139, 182, 188, 0.4);
   box-shadow: 0 0 8px rgba(139, 182, 188, 0.15);
+}
+
+.snapshot-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 8, 13, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.snapshot-modal {
+  width: min(900px, 100%);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: linear-gradient(165deg, rgba(20, 48, 56, 0.98), rgba(12, 34, 41, 0.98));
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.45);
+  padding: 1rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.snapshot-modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.snapshot-modal-header h3 {
+  margin: 0;
+}
+
+.snapshot-modal-header p {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.snapshot-close {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #123a43;
+  color: var(--text-primary);
+  padding: 0.4rem 0.65rem;
+  cursor: pointer;
+}
+
+.snapshot-chart-wrap {
+  height: 360px;
+  border-radius: 10px;
+  border: 1px solid #244c57;
+  background: linear-gradient(180deg, #0a1d25 0%, #0c222b 100%);
+  padding: 0.6rem;
 }
 
 @keyframes pulse {

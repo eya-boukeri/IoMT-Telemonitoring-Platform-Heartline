@@ -39,7 +39,7 @@ while ((Get-Date) -lt $endTime) {
     Write-Host "$(Get-Date -Format 'HH:mm:ss') ❤️ $currentHR bpm" -ForegroundColor Yellow
     
     $message | Out-File -FilePath temp_msg.json -Encoding UTF8 -Force
-    type temp_msg.json | docker exec -i mosquitto-pfa-v2 mosquitto_pub -h localhost -p 1883 -t "health/sensorData" -l
+    type temp_msg.json | docker exec -i mosquitto-pfa-v2 mosquitto_pub -h localhost -p 1883 -t "vitals/$PatientId/data" -l
     
     Start-Sleep -Milliseconds $IntervalMs
 }

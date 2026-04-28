@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medtech.notification.model.Alert;
 import com.medtech.notification.model.NotificationRecipient;
@@ -91,7 +92,9 @@ public class AlertConsumer {
             notificationLog.setSentAt(Instant.now());
             logRepository.save(notificationLog);
 
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
+            log.error("❌ Invalid alert payload JSON: {}", e.getMessage(), e);
+        } catch (RuntimeException e) {
             log.error("❌ Error processing alert: {}", e.getMessage(), e);
         }
     }

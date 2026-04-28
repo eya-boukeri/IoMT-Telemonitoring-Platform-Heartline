@@ -62,13 +62,6 @@ spring:
           filters:
             - RewritePath=/api/analytics/(?<segment>.*), /${segment}
 
-        - id: alert-service
-          uri: http://alert-service:8082
-          predicates:
-            - Path=/api/alerts/**
-          filters:
-            - RewritePath=/api/alerts/(?<segment>.*), /${segment}
-
         - id: notification-service
           uri: http://notification-service:9095
           predicates:
