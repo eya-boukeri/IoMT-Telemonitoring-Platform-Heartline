@@ -47,6 +47,7 @@ const buildVitalPoint = (raw, previousPoint) => {
     toNumber(base.ppgFilteredMean) ??
     toNumber(base.ppgSignal) ??
     toNumber(base.ppg) ??
+    toNumber(base.greenAvg) ??
     toNumber(base.ppgGreenAverage) ??
     toNumber(base.ppgMean) ??
     DEFAULT_METRICS.ppgSignal;
@@ -168,8 +169,9 @@ function App() {
       const nextMs = toTimestampMs(nextPoint.timestamp);
       const previousMs = toTimestampMs(previousPoint?.timestamp);
       
-      // Reject if timestamps are not strictly ascending
-      if (previousMs !== null && nextMs !== null && nextMs <= previousMs) {
+      // Reject if timestamps are way too old (e.g. historical data arriving late)
+      // but allow slight out-of-order points (e.g. within same second) from the watch
+      if (previousMs !== null && nextMs !== null && nextMs < previousMs - 5000) {
         return previous;
       }
 
@@ -341,16 +343,31 @@ function App() {
     const handleNotificationEvent = (event) => {
       try {
         const parsed = JSON.parse(event.data);
-        pushAlert(parsed);
+        // Only process objects that look like alerts (have alertType or severity or message)
+        if (parsed && typeof parsed === 'object' && (parsed.alertType || parsed.severity || parsed.message)) {
+          pushAlert(parsed);
+        }
       } catch (_error) {
         // Ignore non-JSON housekeeping events.
       }
     };
 
-    validPatients.forEach((patientId) => {
+    const connectNotificationSSE = (patientId) => {
       const source = new EventSource(`${NOTIFICATION_SSE_BASE_URL}/stream/${patientId}`);
       source.addEventListener('alert', handleNotificationEvent);
       source.onmessage = handleNotificationEvent;
+
+      source.onerror = () => {
+        // Auto-reconnect: EventSource reconnects automatically by default,
+        // but we log for visibility.
+        console.warn(`Notification SSE error for ${patientId}, reconnecting...`);
+      };
+
+      return source;
+    };
+
+    validPatients.forEach((patientId) => {
+      const source = connectNotificationSSE(patientId);
       notificationEventSourcesRef.current.push(source);
     });
 
@@ -568,7 +585,7 @@ function App() {
 
           <article className="panel schedule-panel">
             <div className="panel-head">
-              <h3>Alertes</h3>
+              <h3>Alertes{alerts.length > 0 && <span className="alert-count-badge">{alerts.length}</span>}</h3>
               <p>FLUX NOTIFICATION</p>
             </div>
 
