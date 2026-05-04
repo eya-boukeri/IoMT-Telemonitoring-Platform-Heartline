@@ -1,0 +1,268 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                  📊 MONITORING 7 TERMINAUX - PFA                               ║
+║                      Plateforme Télésurveillance Médicale                      ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+┌─ ÉTAPE 1: DÉMARRER ─────────────────────────────────────────────────────────┐
+│                                                                               │
+│  cd pfa-infrastructure                                                       │
+│  .\DEMARRER_MONITORING.ps1                                                  │
+│                                                                               │
+│  ✓ Affiche les 7 commandes PowerShell à copier-coller                      │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ ÉTAPE 2: OUVRIR 7 TERMINAUX ──────────────────────────────────────────────┐
+│                                                                               │
+│  Ctrl+` → Ouvrir 1er terminal                                               │
+│  Cliquer "+" → Ajouter 6 autres (ou Ctrl+Shift+` répété)                   │
+│  Total: 7 terminaux côte à côte                                             │
+│                                                                               │
+│  ┌──────────┬──────────┬──────────┐                                          │
+│  │   T1     │   T2     │   T3     │                                          │
+│  │  MQTT    │ Ingest   │  Kafka   │                                          │
+│  │          │          │  Raw     │                                          │
+│  ├──────────┼──────────┼──────────┤                                          │
+│  │   T4     │   T5     │   T6     │                                          │
+│  │  Alerts  │ Analytics│ Notifs   │                                          │
+│  └──────────┴──────────┴──────────┘                                          │
+│  ┌────────────────────────────────┐                                          │
+│  │   T7 - InfluxDB               │                                          │
+│  │   (Dernières données)         │                                          │
+│  └────────────────────────────────┘                                          │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ ÉTAPE 3: COPIER-COLLER DANS CHAQUE TERMINAL ──────────────────────────────┐
+│                                                                               │
+│  Voir le fichier: COMMANDES_RAPIDES.md                                     │
+│  (Toutes les 7 commandes prêtes à copier-coller)                           │
+│                                                                               │
+│  T1: docker exec -it mosquitto-pfa-v2 mosquitto_sub -t "vitals/#" -v      │
+│  T2: docker logs ingestion-service-pfa --tail 30 -f                         │
+│  T3: docker exec kafka-pfa-v2 rpk topic consume vitals-raw ...             │
+│  T4: docker exec kafka-pfa-v2 rpk topic consume medical-alerts ...         │
+│  T5: docker logs data-analytics-service-pfa --tail 20 -f                    │
+│  T6: docker logs notification-service-pfa --tail 20 -f                      │
+│  T7: Code PowerShell dans COMMANDES_RAPIDES.md                             │
+│                                                                               │
+│  ⏱️  Attendre 30 secondes → Les logs doivent s'afficher                      │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ ÉTAPE 4: LANCER LES TESTS ─────────────────────────────────────────────────┐
+│                                                                               │
+│  Option A - Automatique (RECOMMANDÉ):                                       │
+│  ──────────────────────────────────────                                     │
+│  cd pfa-infrastructure                                                       │
+│  .\test-scenarios.ps1                                                       │
+│                                                                               │
+│  ✓ Exécute Scénario 1 (patient normal)                                     │
+│  ✓ Exécute Scénario 2 (patient critique)                                   │
+│  ✓ Interactive - appuyez ENTRÉE entre les scénarios                        │
+│                                                                               │
+│  Option B - Manuel:                                                          │
+│  ──────────────────                                                         │
+│  Copier les payloads de COMMANDES_RAPIDES.md dans un 8ème terminal         │
+│  (Plus de contrôle, mais plus lent)                                        │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                            🟢 SCÉNARIO 1: PATIENT NORMAL                       ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+Données envoyées:
+  • Mesure 1: FC=72, SpO2=99, Temp=36.6 ✅ Normal
+  • Mesure 2: FC=75, SpO2=98, Temp=36.5 ✅ Normal
+  • Mesure 3: FC=70, SpO2=99, Temp=36.7 ✅ Normal
+
+Résultat attendu:
+  ✅ T1: 3 messages MQTT affichés
+  ✅ T2: Logs "Processing vitals..." (3x)
+  ✅ T3: Messages dans vitals-raw
+  ❌ T4: VIDE (pas d'alerte) ← Important!
+  ❌ T5: Silencieux
+  ❌ T6: Silencieux
+
+➜ Conclusion: Pas d'alerte = Comportement CORRECT ✓
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                         🔴 SCÉNARIO 2: PATIENT CRITIQUE                        ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+Données envoyées:
+  • Mesure 1: FC=80,  SpO2=97, Temp=36.8  ✅ Normal
+  • Mesure 2: FC=55,  SpO2=94, Temp=37.0  ⚠️  Anomalie légère
+  • Mesure 3: FC=155, SpO2=82, Temp=39.2  🔴 CRITIQUE
+  • Mesure 4: FC=152, SpO2=80, Temp=39.5  🔴 PERSISTANCE
+
+Résultat attendu:
+  ✅ T1: 4 messages MQTT
+  ✅ T2: Logs de traitement
+  ✅ T3: Messages dans vitals-raw
+  
+  🔴 T4: Alerte JSON CRITICAL (10-15s après publication)
+     ➜ Contient: severity="CRITICAL", patient-urgent
+  
+  🔴 T5: Logs "Anomaly detected" + "Publishing alert"
+  
+  🔴 T6: Logs "Alert received" + "Email sent to farah.attia21@gmail.com"
+  
+  ✅ T7: Données InfluxDB avec FC=155, SpO2=82
+  
+  📧 EMAIL REÇU: Gmail farah.attia21@gmail.com
+     Sujet: [CRITICAL] Alerte: ANOMALY
+
+➜ Conclusion: Alerte CRITICAL + Email = Comportement CORRECT ✓
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                             ⏱️  TIMELINE COMPLÈTE                               ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+T0s     : Publier les données
+T1-2s   : MQTT reçoit (T1) ✓
+T2-5s   : Ingestion parse JSON (T2) ✓
+T5-8s   : Kafka vitals-raw reçoit (T3) ✓
+T10-15s : Data Analytics détecte anomalie (T5) 🔴 <- CLEF!
+T12-18s : Alerte CRITICAL dans Kafka (T4) 🔴 <- CHERCHER ICI!
+T15-25s : Email envoyé (T6) 🔴
+T20s+   : InfluxDB reçoit les données (T7) ✓
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                          🎨 VÉRIFICATION DASHBOARD                             ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+1. Ouvrir: http://localhost:5173
+2. Se connecter:
+   Email: dr-farah
+   Password: farah1234
+3. Sélectionner: patient-urgent
+4. Vérifier:
+   ✅ Graphique FC montre pic à 155 bpm (scénario 2)
+   ✅ Graphique SpO2 montre creux à 82%
+   ✅ Alerte CRITICAL visible en rouge
+   ✅ Timestamp correspond à l'envoi
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                          📧 VÉRIFICATION EMAIL                                 ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+1. Ouvrir: https://mail.google.com
+2. Compte: farah.attia21@gmail.com
+3. Chercher un email avec:
+   - Sujet: [CRITICAL] Alerte: ANOMALY
+   - Contient: patient-urgent
+   - Contient: FC, SpO2, Température
+   - Date/Heure: Récent (après le test)
+4. Vérifier les SPAM si pas dans Inbox
+
+Délai attendu: 15-30 secondes après publication du scénario
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                      📋 FICHIERS D'AIDE DISPONIBLES                            ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+📄 DEMARRER_MONITORING.ps1
+   → Lance ce fichier en premier pour voir les instructions
+
+📄 COMMANDES_RAPIDES.md
+   → Toutes les 7 commandes prêtes à copier-coller
+   → Les payloads JSON pour les tests manuels
+
+📄 GUIDE_TESTS_COMPLETS.md
+   → Guide détaillé avec explications
+   → Dépannage si quelque chose ne fonctionne pas
+
+📄 test-scenarios.ps1
+   → Exécute automatiquement les 2 scénarios
+   → Interactive avec pauses entre les scénarios
+
+📄 quick-diagnostic.ps1
+   → Vérifie que tous les services sont actifs
+
+📄 README_MONITORING.md
+   → Ce fichier (résumé complet)
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                           🔧 DÉPANNAGE RAPIDE                                  ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+❌ Pas de messages T1 (MQTT)?
+   → docker logs mosquitto-pfa-v2 --tail 20
+   → docker restart mosquitto-pfa-v2
+
+❌ Pas d'alerte T4 (Kafka)?
+   → Attendre 15-20 secondes (T5 doit afficher "Anomaly detected" d'abord)
+   → docker logs data-analytics-service-pfa --tail 100
+
+❌ Pas d'email T6?
+   → docker logs notification-service-pfa --tail 100
+   → Chercher erreurs SMTP/Brevo
+
+❌ Pas de données T7 (InfluxDB)?
+   → curl http://localhost:8086/health
+   → docker logs influxdb-pfa --tail 20
+
+❌ Les 7 terminaux ne se lancent pas?
+   → Copier-coller manuellement les commandes
+   → Voir COMMANDES_RAPIDES.md
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                      ✅ CHECKLIST PRÉ-SOUTENANCE                              ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+Avant la démo/soutenance, vérifier:
+
+Infrastructure:
+  ☐ docker ps montre 8+ containers actifs
+  ☐ Docker Compose stack complète
+
+Monitoring:
+  ☐ 7 terminaux ouverts et affichent les logs
+  ☐ Chaque terminal affiche des données (pas d'erreur)
+
+Scénario 1:
+  ☐ 3 mesures envoyées (patient-normal)
+  ☐ T1-T3: Données reçues ✓
+  ☐ T4: Vide (pas d'alerte) ✓
+  ☐ T5-T6: Silence ✓
+
+Scénario 2:
+  ☐ 4 mesures envoyées (patient-urgent avec critiques)
+  ☐ T1-T3: Données reçues ✓
+  ☐ T4: Alerte CRITICAL affichée 🔴
+  ☐ T5: "Anomaly detected" affiché 🔴
+  ☐ T6: "Email sent" affiché 🔴
+
+Email:
+  ☐ Email reçu dans farah.attia21@gmail.com
+  ☐ Sujet contient [CRITICAL]
+  ☐ Contient détails patient-urgent
+
+Dashboard:
+  ☐ http://localhost:5173 accessible
+  ☐ Login dr-farah/farah1234 fonctionne
+  ☐ Patient-urgent sélectionnable
+  ☐ Alerte CRITICAL visible
+  ☐ Graphiques affichent les pics critiques
+
+════════════════════════════════════════════════════════════════════════════════
+
+🎉 SI TOUT EST ✅ : Votre plateforme est COMPLÈTEMENT OPÉRATIONNELLE!
+
+Vous avez démontré:
+  ✅ Ingestion MQTT temps réel
+  ✅ Transport Kafka fiable
+  ✅ Stockage InfluxDB
+  ✅ Analyse d'anomalies ML
+  ✅ Alertes CRITICAL instantanées
+  ✅ Notifications email
+  ✅ Dashboard interactif
+  ✅ Architecture microservices scalable
+
+PRÊT POUR LA SOUTENANCE! 🚀
+
+════════════════════════════════════════════════════════════════════════════════
+Créé: 22 Avril 2026 | PFA - Télésurveillance Médicale | v1.0
+════════════════════════════════════════════════════════════════════════════════

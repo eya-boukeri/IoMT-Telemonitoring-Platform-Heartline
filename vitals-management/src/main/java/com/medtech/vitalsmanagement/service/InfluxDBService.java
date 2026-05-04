@@ -331,21 +331,54 @@ public class InfluxDBService {
             data.setPatientId(String.valueOf(patientTag));
         }
 
-        data.setHeartRate(toDouble(record.getValueByKey("heartRate")));
+        data.setHeartRate(firstNonNull(
+            toDouble(record.getValueByKey("heartRate")),
+            toDouble(record.getValueByKey("estimated_heart_rate"))
+        ));
         data.setBloodPressureSystolic(toDouble(record.getValueByKey("bloodPressureSystolic")));
         data.setBloodPressureDiastolic(toDouble(record.getValueByKey("bloodPressureDiastolic")));
-        data.setPpgGreenMin(toDouble(record.getValueByKey("ppgGreenMin")));
-        data.setPpgGreenMax(toDouble(record.getValueByKey("ppgGreenMax")));
-        data.setPpgGreenAverage(toDouble(record.getValueByKey("ppgGreenAverage")));
+        data.setPpgGreenMin(firstNonNull(
+            toDouble(record.getValueByKey("ppgGreenMin")),
+            toDouble(record.getValueByKey("ppg_min")),
+            toDouble(record.getValueByKey("ppg_filtered_min"))
+        ));
+        data.setPpgGreenMax(firstNonNull(
+            toDouble(record.getValueByKey("ppgGreenMax")),
+            toDouble(record.getValueByKey("ppg_max")),
+            toDouble(record.getValueByKey("ppg_filtered_max"))
+        ));
+        data.setPpgGreenAverage(firstNonNull(
+            toDouble(record.getValueByKey("ppgGreenAverage")),
+            toDouble(record.getValueByKey("ppg_mean")),
+            toDouble(record.getValueByKey("ppg_filtered_mean"))
+        ));
         data.setPpgFilteredSignal(firstNonNull(
             toDouble(record.getValueByKey("ppgFilteredSignal")),
-            toDouble(record.getValueByKey("ppgGreenAverage"))
+            toDouble(record.getValueByKey("ppg_filtered_mean")),
+            toDouble(record.getValueByKey("ppgGreenAverage")),
+            toDouble(record.getValueByKey("ppg_mean"))
         ));
-        data.setPpgDataPoints(toInteger(record.getValueByKey("ppgDataPoints")));
-        data.setSignalQualityScore(toDouble(record.getValueByKey("signalQualityScore")));
-        data.setAccelerometerMagnitudeAverage(toDouble(record.getValueByKey("accelerometerMagnitudeAverage")));
-        data.setAccelerometerMagnitudeMax(toDouble(record.getValueByKey("accelerometerMagnitudeMax")));
-        data.setAccelerometerVariance(toDouble(record.getValueByKey("accelerometerVariance")));
+        data.setPpgDataPoints(firstNonNull(
+            toInteger(record.getValueByKey("ppgDataPoints")),
+            toInteger(record.getValueByKey("sample_count")),
+            toInteger(record.getValueByKey("valid_samples"))
+        ));
+        data.setSignalQualityScore(firstNonNull(
+            toDouble(record.getValueByKey("signalQualityScore")),
+            toDouble(record.getValueByKey("signal_quality_score"))
+        ));
+        data.setAccelerometerMagnitudeAverage(firstNonNull(
+            toDouble(record.getValueByKey("accelerometerMagnitudeAverage")),
+            toDouble(record.getValueByKey("activity_mean"))
+        ));
+        data.setAccelerometerMagnitudeMax(firstNonNull(
+            toDouble(record.getValueByKey("accelerometerMagnitudeMax")),
+            toDouble(record.getValueByKey("activity_max"))
+        ));
+        data.setAccelerometerVariance(firstNonNull(
+            toDouble(record.getValueByKey("accelerometerVariance")),
+            toDouble(record.getValueByKey("activity_variance"))
+        ));
         return data;
     }
 
@@ -366,8 +399,14 @@ public class InfluxDBService {
         }
     }
 
-    private <T> T firstNonNull(T first, T second) {
-        return first != null ? first : second;
+    @SafeVarargs
+    private <T> T firstNonNull(T... values) {
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private Double toDouble(Object value) {

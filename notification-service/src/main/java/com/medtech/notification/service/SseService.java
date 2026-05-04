@@ -20,7 +20,7 @@ public class SseService {
     private final CopyOnWriteArrayList<SseEmitter> globalEmitters = new CopyOnWriteArrayList<>();
 
     public SseEmitter createEmitter(String patientId) {
-        SseEmitter emitter = new SseEmitter(60_000L);
+        SseEmitter emitter = new SseEmitter(600_000L);
         
         emitter.onCompletion(() -> removeEmitter(patientId, emitter));
         emitter.onTimeout(() -> {
@@ -41,7 +41,7 @@ public class SseService {
     }
 
     public SseEmitter createGlobalEmitter() {
-        SseEmitter emitter = new SseEmitter(60_000L);
+        SseEmitter emitter = new SseEmitter(600_000L);
         globalEmitters.add(emitter);
         return emitter;
     }
@@ -51,7 +51,10 @@ public class SseService {
         if (emitters != null) {
             emitters.forEach(emitter -> {
                 try {
+                    // Send as named 'alert' event for addEventListener('alert', ...)
                     emitter.send(SseEmitter.event().name("alert").data(alert));
+                    // Also send as default message event for onmessage handler compatibility
+                    emitter.send(SseEmitter.event().data(alert));
                     log.debug("📡 Alert sent to patient {}", patientId);
                 } catch (IOException e) {
                     log.error("Error sending to patient {}: {}", patientId, e.getMessage());

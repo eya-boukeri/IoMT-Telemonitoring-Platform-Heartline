@@ -45,7 +45,7 @@ public class MqttConfig {
     @Value("${mqtt.client.id:ingestion-service-client}")
     private String clientId;
 
-    @Value("${mqtt.topic.input:health/sensorData}")
+    @Value("${mqtt.topic.input:vitals/+/data}")
     private String inputTopic;
 
     @Value("${mqtt.qos:1}")

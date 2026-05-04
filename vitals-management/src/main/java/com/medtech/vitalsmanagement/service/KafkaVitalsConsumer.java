@@ -26,7 +26,7 @@ public class KafkaVitalsConsumer {
      * Note: medical-alerts are handled by notification-service
      */
     @KafkaListener(
-        topics = {"vitals-data", "vitals-aggregated"},
+        topics = {"${kafka.topic.vitals:vitals-data}", "${kafka.topic.aggregated:signals.aggregated}"},
         groupId = "sse-stream-group",
         containerFactory = "kafkaListenerContainerFactory"
     )

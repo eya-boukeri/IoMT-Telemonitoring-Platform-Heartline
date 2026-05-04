@@ -24,7 +24,7 @@ public class VitalStreamService {
     // Global stream for all patients
     private final CopyOnWriteArrayList<SseEmitter> globalEmitters = new CopyOnWriteArrayList<>();
 
-    private static final long SSE_TIMEOUT = 300000L; // 5 minutes
+    private static final long SSE_TIMEOUT = 600000L; // 10 minutes
 
     /**
      * Register a new SSE emitter for a specific patient
@@ -134,9 +134,10 @@ public class VitalStreamService {
     private void sendToEmitters(CopyOnWriteArrayList<SseEmitter> emitters, Object data, String eventName) {
         for (SseEmitter emitter : emitters) {
             try {
+                // Send as default message event (no name) so dashboard onmessage handler receives it.
+                // Named SSE events require addEventListener('eventName') on the client side.
                 SseEmitter.SseEventBuilder event = SseEmitter.event()
                     .id(System.currentTimeMillis() + "-" + eventName)
-                    .name(eventName)
                     .data(data)
                     .reconnectTime(1000);
 

@@ -98,7 +98,6 @@ public class VitalsController {
                     try {
                         SseEmitter.SseEventBuilder event = SseEmitter.event()
                             .id(vital.getPatientId() + "-" + vital.getTimestamp())
-                            .name("vital-history")
                             .data(vital)
                             .reconnectTime(1000);
                         emitter.send(event);
@@ -154,7 +153,6 @@ public class VitalsController {
                             try {
                                 SseEmitter.SseEventBuilder event = SseEmitter.event()
                                     .id(vital.getPatientId() + "-" + vital.getTimestamp())
-                                    .name("vital-history")
                                     .data(vital)
                                     .reconnectTime(1000);
                                 emitter.send(event);
