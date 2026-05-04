@@ -82,6 +82,13 @@
             <version>3.6.1</version>
         </dependency>
 
+        <!-- Cloudflare R2 (S3-compatible object storage) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.31.50</version>
+        </dependency>
+
         <!-- Spring Boot Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

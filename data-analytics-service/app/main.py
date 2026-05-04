@@ -1,14 +1,48 @@
 import time
 import logging
+import uuid
 from datetime import datetime
 from app.config import *
 from app.influxdb_client import PPGInfluxReader
 from app.feature_extractor import PPGFeatureExtractor
 from app.model import PPGModel
 from app.kafka_client import create_producer, send_alert
+from app.cloud_sender import fetch_raw_points, send_anomaly_snapshot
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def attach_snapshot_to_alert(alert, patient_id, model_version):
+    """Crée un snapshot brut PostgreSQL et ajoute snapshotId à l'alerte si disponible."""
+    alert_id = alert.get('alertId') or str(uuid.uuid4())
+    alert['alertId'] = alert_id
+
+    raw_points = fetch_raw_points(
+        ingestion_url=INGESTION_SERVICE_URL,
+        patient_id=patient_id,
+        limit=RAW_SNAPSHOT_POINTS,
+    )
+
+    snapshot_id = send_anomaly_snapshot(
+        ingestion_url=INGESTION_SERVICE_URL,
+        alert_id=alert_id,
+        patient_id=patient_id,
+        detected_at=alert.get('timestamp'),
+        severity=alert.get('severity'),
+        confidence=alert.get('confidence'),
+        model_version=model_version,
+        message=alert.get('message'),
+        raw_points=raw_points,
+        max_points=RAW_SNAPSHOT_POINTS,
+    )
+
+    if snapshot_id:
+        alert['snapshotId'] = snapshot_id
+    else:
+        logger.warning(f"Snapshot indisponible pour alertId={alert_id}, patientId={patient_id}")
+
+    return alert
 
 def main():
     # Initialisations
@@ -69,6 +103,7 @@ def main():
                             'confidence': 1.0,
                             'ml_model_version': model.version
                         }
+                        alert = attach_snapshot_to_alert(alert, patient_id, model.version)
                         if send_alert(producer, TOPIC_OUT, alert):
                             last_alert[patient_id] = now
                             logger.info(f"Alerte rule-based envoyée pour {patient_id}")
@@ -107,6 +142,7 @@ def main():
                             'confidence': confidence,
                             'ml_model_version': model.version
                         }
+                        alert = attach_snapshot_to_alert(alert, patient_id, model.version)
                         if send_alert(producer, TOPIC_OUT, alert):
                             last_alert[patient_id] = now
                             logger.info(f"Alerte envoyée pour {patient_id}")

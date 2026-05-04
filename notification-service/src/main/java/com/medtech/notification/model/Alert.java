@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Alert {
     private String alertId;
+    private String snapshotId;
     private String patientId;
     private String patientName;
     private String alertType;

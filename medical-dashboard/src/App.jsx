@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import NormalPatientVisualization from './NormalPatientVisualization';
 import './App.css';
 
 const API_ROOT = import.meta.env.REACT_APP_API_URL || '/api';
@@ -10,6 +11,9 @@ const NOTIFICATION_API_ROOT = import.meta.env.VITE_NOTIFICATION_API_URL ||
                               import.meta.env.REACT_APP_NOTIFICATION_API_URL || 
                               (window.location.hostname === 'localhost' ? 'http://localhost:9095/api' : '/api');
 const NOTIFICATION_SSE_BASE_URL = `${NOTIFICATION_API_ROOT}/notifications`;
+const INGESTION_API_ROOT = import.meta.env.VITE_INGESTION_API_URL ||
+                           import.meta.env.REACT_APP_INGESTION_API_URL ||
+                           (window.location.hostname === 'localhost' ? 'http://localhost:8081/api/ingestion' : '/api/ingestion');
 const MAX_POINTS = 250;
 const AUTO_UPDATE_MS = 3000;
 const MAX_ALERTS = 8;
@@ -124,13 +128,59 @@ const getSeverityClass = (severity) => {
   return 'stable';
 };
 
+const safeParseJson = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (_error) {
+    return null;
+  }
+};
+
+const extractSnapshotSeries = (snapshot) => {
+  const rawData = safeParseJson(snapshot?.rawData);
+
+  if (!rawData) {
+    return [];
+  }
+
+  const points = Array.isArray(rawData)
+    ? rawData
+    : Array.isArray(rawData.points)
+      ? rawData.points
+      : [];
+
+  const series = points.map((point, index) => {
+    const numericValue = toNumber(point?.value);
+    if (numericValue === null) {
+      return null;
+    }
+
+    return {
+      index,
+      value: Number(numericValue.toFixed(2)),
+      timestamp: point?.timestamp || null,
+    };
+  }).filter(Boolean);
+
+  return series.slice(-200);
+};
+
 function App() {
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [vitalData, setVitalData] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [snapshotSeries, setSnapshotSeries] = useState([]);
+  const [snapshotMeta, setSnapshotMeta] = useState(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotError, setSnapshotError] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [lastRefreshAt, setLastRefreshAt] = useState(null);
+  const [showNormalPatientViz, setShowNormalPatientViz] = useState(false); // Masquer par défaut
   const eventSourceRef = useRef(null);
   const notificationEventSourcesRef = useRef([]);
   const lastPointAtRef = useRef(0);
@@ -147,12 +197,71 @@ function App() {
       message: rawAlert.message || 'Nouvelle alerte recue',
       severity: String(rawAlert.severity || 'WARNING').toUpperCase(),
       timestamp: rawAlert.timestamp || new Date().toISOString(),
+      snapshotId: rawAlert.snapshotId || rawAlert.snapshot_id || null,
     };
 
     setAlerts((previous) => {
       const withoutDuplicate = previous.filter((item) => item.id !== normalized.id);
       return [normalized, ...withoutDuplicate].slice(0, MAX_ALERTS);
     });
+  }, []);
+
+  const closeSnapshotModal = useCallback(() => {
+    setSnapshotMeta(null);
+    setSnapshotSeries([]);
+    setSnapshotError('');
+    setSnapshotLoading(false);
+  }, []);
+
+  const openSnapshotForAlert = useCallback(async (alert) => {
+    if (!alert) {
+      return;
+    }
+
+    setSnapshotLoading(true);
+    setSnapshotError('');
+    setSnapshotSeries([]);
+    setSnapshotMeta({
+      alertId: alert.id,
+      snapshotId: alert.snapshotId || null,
+      patientId: alert.patientId,
+      message: alert.message,
+      severity: alert.severity,
+      timestamp: alert.timestamp,
+    });
+
+    try {
+      const preferredUrl = alert.snapshotId
+        ? `${INGESTION_API_ROOT}/anomaly-snapshots/${alert.snapshotId}`
+        : `${INGESTION_API_ROOT}/anomaly-snapshots/by-alert/${alert.id}`;
+
+      let response = await fetch(preferredUrl);
+
+      if (!response.ok && alert.snapshotId) {
+        response = await fetch(`${INGESTION_API_ROOT}/anomaly-snapshots/by-alert/${alert.id}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const snapshot = await response.json();
+      const series = extractSnapshotSeries(snapshot);
+
+      if (!series.length) {
+        throw new Error('Snapshot vide ou format non reconnu');
+      }
+
+      setSnapshotSeries(series);
+      setSnapshotMeta((previous) => ({
+        ...(previous || {}),
+        snapshotId: snapshot?.id || previous?.snapshotId || null,
+      }));
+    } catch (error) {
+      setSnapshotError(error?.message || 'Impossible de charger le snapshot brut');
+    } finally {
+      setSnapshotLoading(false);
+    }
   }, []);
 
   const pushVitalPoint = useCallback((rawPoint) => {
@@ -267,13 +376,18 @@ function App() {
     try {
       const response = await fetch(`${API_BASE_URL}/patients?days=30`);
       const data = await response.json();
-      setPatients(Array.isArray(data) ? data : []);
-      if (Array.isArray(data) && data.length > 0 && !selectedPatient) {
-        setSelectedPatient(data[0]);
+      // Ajouter temporairement patient-normal à la liste
+      const patientList = Array.isArray(data) ? [...data] : [];
+      if (!patientList.includes('patient-normal')) {
+        patientList.push('patient-normal');
+      }
+      setPatients(patientList);
+      if (patientList.length > 0 && !selectedPatient) {
+        setSelectedPatient(patientList[0]);
       }
     } catch (error) {
       console.error('Error fetching patients:', error);
-      setPatients([FALLBACK_PATIENT_ID]);
+      setPatients([FALLBACK_PATIENT_ID, 'patient-normal']);
       setSelectedPatient((currentSelectedPatient) => currentSelectedPatient || FALLBACK_PATIENT_ID);
     }
   }, [selectedPatient]);
@@ -470,7 +584,15 @@ function App() {
         <button type="button" className="nav-btn">◷</button>
         <button type="button" className="nav-btn">⊕</button>
         <button type="button" className="nav-btn">☰</button>
-        <button type="button" className="nav-btn">☆</button>
+        <button
+          type="button"
+          className={`nav-btn ${showNormalPatientViz ? 'active' : ''}`}
+          onClick={() => setShowNormalPatientViz(!showNormalPatientViz)}
+          title={showNormalPatientViz ? "Masquer référence patient normal" : "Afficher référence patient normal"}
+          style={{ opacity: showNormalPatientViz ? 1 : 0.5 }}
+        >
+          {showNormalPatientViz ? '📊' : '⚕️'}
+        </button>
       </aside>
 
       <div className="main-panel">
@@ -497,11 +619,12 @@ function App() {
 
         <section className="hero-monitor panel">
           <div className="panel-head">
-            <h2>Signal PPG</h2>
+            <h2>🫀 Signal PPG - Temps Réel</h2>
             <p>
-              {currentPatientLabel} · 
-              {latestDataPoints ? ` · ${latestDataPoints} points` : ''}
+              {currentPatientLabel} · Données live · 
+              {latestDataPoints ? ` ${latestDataPoints} points` : ''}
               {Number.isFinite(latestSignalQuality) ? ` · qualité ${Math.round(latestSignalQuality)}%` : ''}
+              {isConnected ? ' · 🔴 Connecté' : ' · ⚪ Déconnecté'}
             </p>
           </div>
 
@@ -595,23 +718,89 @@ function App() {
                 const severityLabel = alert.severity || 'INFO';
                 const severityBadgeClass = `severity-badge severity-${severityLabel.toLowerCase()}`;
                 return (
-                  <div key={alert.id} className="schedule-item">
+                  <button
+                    key={alert.id}
+                    type="button"
+                    className="schedule-item schedule-item-button"
+                    onClick={() => openSnapshotForAlert(alert)}
+                    title="Cliquer pour voir la courbe brute"
+                  >
                     <span className="schedule-time">{formatTime(alert.timestamp)}</span>
                     <span className={`schedule-dot ${severityClass}`}></span>
                     <div className={severityBadgeClass}>{severityLabel}</div>
                     <div className="schedule-text">
                       <strong>{alert.alertType}</strong>
                       <p>{alert.message}</p>
-                      <small>Patient: {alert.patientId}</small>
+                      <small>
+                        Patient: {alert.patientId}
+                        {alert.snapshotId ? ' · snapshot disponible' : ' · snapshot en attente'}
+                      </small>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
               {!alerts.length && <p className="no-data">Aucune alerte pour le moment.</p>}
             </div>
           </article>
         </section>
+
+        {showNormalPatientViz && (
+          <section className="normal-patient-section">
+            <NormalPatientVisualization />
+          </section>
+        )}
       </div>
+
+      {snapshotMeta && (
+        <div className="snapshot-modal-backdrop" onClick={closeSnapshotModal}>
+          <div className="snapshot-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="snapshot-modal-header">
+              <div>
+                <h3>Courbe brute de l'alerte</h3>
+                <p>
+                  {snapshotMeta.patientId} · {formatTime(snapshotMeta.timestamp)} · {snapshotMeta.severity}
+                </p>
+              </div>
+              <button type="button" className="snapshot-close" onClick={closeSnapshotModal}>Fermer</button>
+            </div>
+
+            {snapshotLoading && <p className="no-data">Chargement du snapshot...</p>}
+            {!snapshotLoading && snapshotError && <p className="no-data">{snapshotError}</p>}
+
+            {!snapshotLoading && !snapshotError && !!snapshotSeries.length && (
+              <div className="snapshot-chart-wrap">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={snapshotSeries}>
+                    <CartesianGrid stroke="#1b2635" strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="index"
+                      tick={{ fill: '#9fb3c8', fontSize: 11 }}
+                      label={{ value: 'Point brut', fill: '#9fb3c8', position: 'insideBottom', offset: -4 }}
+                    />
+                    <YAxis
+                      tick={{ fill: '#9fb3c8', fontSize: 11 }}
+                      label={{ value: 'Amplitude', angle: -90, fill: '#9fb3c8', position: 'insideLeft' }}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      labelFormatter={(value) => `Point: ${value}`}
+                      formatter={(value) => [`${Number(value).toFixed(2)}`, 'PPG brut']}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#f97316"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -41,3 +41,7 @@ INFLUXDB_ORG = os.getenv('INFLUXDB_ORG', 'myorg')
 INFLUXDB_BUCKET = os.getenv('INFLUXDB_BUCKET', 'medical_data')
 QUERY_WINDOW_SECONDS = int(os.getenv('QUERY_WINDOW_SECONDS', '30'))
 POLL_INTERVAL_SECONDS = int(os.getenv('POLL_INTERVAL_SECONDS', '10'))
+
+# Snapshot brut des anomalies (source PostgreSQL via ingestion-service)
+INGESTION_SERVICE_URL = os.getenv('INGESTION_SERVICE_URL', 'http://ingestion-service:8081/api/ingestion')
+RAW_SNAPSHOT_POINTS = int(os.getenv('RAW_SNAPSHOT_POINTS', '200'))
