@@ -74,7 +74,8 @@ The project directly tackles core medical IoT and telemetry challenges:
 The platform orchestrates interactions across three primary clinical and administrative actors, organized into modular functional packages:
 
 <p align="center">
-  <img src="docs/images/diagramme-cas-utilisation.png" alt="Diagramme de cas d'utilisation de la plateforme IoMT" width="95%" />
+  <img width="1034" height="482" alt="image" src="https://github.com/user-attachments/assets/df79e347-9176-47ff-b263-b4992d8c6601" />
+
   <br>
   <em><b>Figure 1:</b> Diagramme des cas d'utilisation (UML) de la plateforme IoMT de télésurveillance cardiaque.</em>
 </p>
