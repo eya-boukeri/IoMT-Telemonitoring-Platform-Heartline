@@ -349,24 +349,8 @@ It is designed to display:
 - 🔴 Critical alerts
 - 📡 Real-time updates
 
-If screenshots are available, they can be added here:
-
-```text
-screenshots/
-├── dashboard.png
-├── patient-monitoring.png
-└── alerts.png
-```
-
-Then use:
-
-```html
-<p align="center">
- <img width="671" height="412" alt="image" src="https://github.com/user-attachments/assets/212e841e-52b7-4e60-9675-c32b72f23083" />
-<img width="403" height="265" alt="image" src="https://github.com/user-attachments/assets/d1d059c5-c89a-4907-a0b5-9cc7fcecb95c" />
 
 
-</p>
 ```
 
 ---
@@ -433,7 +417,6 @@ The complete data lifecycle can be summarized as follows:
         │
         └──────────────► Notifications
 ```
-<img width="806" height="413" alt="image" src="https://github.com/user-attachments/assets/cec0cc31-2fb6-4868-aaa4-9ec7801dec34" />
 
 ---
 
@@ -568,31 +551,6 @@ docker compose down
 
 ---
 
-# 📁 Project Structure
-
-A simplified representation of the platform is:
-<img width="769" height="436" alt="image" src="https://github.com/user-attachments/assets/3f40d1bf-1225-45e2-9526-3a37f44d71a8" />
-
-
-
-```
-
-
----
-
-# 🧪 Testing & Validation
-
-The platform was tested using simulated patient workloads to evaluate:
-
-- Message delivery
-- Throughput
-- CPU utilization
-- Memory usage
-- Stability over time
-- Concurrent patient handling
-- End-to-end data processing
-
-The validation included both short-duration load tests and longer endurance scenarios. :contentReference[oaicite:9]{index=9}
 
 ---
 
