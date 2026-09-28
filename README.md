@@ -99,7 +99,8 @@ The platform orchestrates interactions across three primary clinical and adminis
 The platform implements a multi-tier, distributed, and event-driven architecture containerized with Docker:
 
 <p align="center">
-  <img src="docs/images/architecture-globale.png" alt="Architecture Globale de la Plateforme IoMT" width="95%" />
+  <img width="812" height="434" alt="image" src="https://github.com/user-attachments/assets/679aa9ff-5867-481c-b5a2-d3f441e91752" />
+
   <br>
   <em><b>Figure 2:</b> Architecture globale distribuée en couches (Edge MQTT, Apache Kafka, Microservices Spring Boot & FastAPI, Cloudflare R2, et Dashboard React).</em>
 </p>
@@ -158,7 +159,8 @@ The platform implements a multi-tier, distributed, and event-driven architecture
 The clinical frontend, named **Heartline**, is a state-of-the-art dark-mode telemetry application built with **React 19**, **Vite**, and **Recharts**. It provides medical specialists with real-time patient status monitoring, live physiological curves, and instant forensic alert evaluation.
 
 <p align="center">
-  <img src="docs/images/dashboard-heartline.png" alt="Dashboard Médical Heartline - Surveillance Temps Réel" width="95%" />
+  <img width="613" height="280" alt="image" src="https://github.com/user-attachments/assets/029e9e5f-72e6-46d7-b92a-51bc8ca7b351" />
+
   <br>
   <em><b>Figure 3:</b> Interface clinique principale Heartline — Suivi télémétrique PPG en temps réel, calcul dynamique du SQS (qualité 98%), statut des patients actifs et panneau de notifications d'alertes SSE.</em>
 </p>
@@ -178,7 +180,8 @@ The clinical frontend, named **Heartline**, is a state-of-the-art dark-mode tele
 When an alert is flagged by the AI engine, the clinician can immediately open the **Courbe brute de l'alerte** modal to examine the high-frequency raw signal segment captured during the event window:
 
 <p align="center">
-  <img src="docs/images/courbe-brute-alerte.png" alt="Inspection de la courbe brute d'alerte" width="85%" />
+  <img width="530" height="368" alt="image" src="https://github.com/user-attachments/assets/cfc31078-5dfd-4ed9-805b-6a2614ce69e3" />
+
   <br>
   <em><b>Figure 4:</b> Modal d'investigation clinique — Inspection détaillée de la courbe brute (Amplitude vs. Point brut) capturée lors de l'anomalie critique (CRITICAL-3).</em>
 </p>
@@ -259,7 +262,8 @@ The **Data Analytics Service** is an asynchronous microservice developed with **
 The architecture leverages a hybrid storage strategy where each database technology fulfills a targeted medical data persistence requirement:
 
 <p align="center">
-  <img src="docs/images/cloud-storage-r2.png" alt="Console Cloudflare R2 - Stockage sélectif des anomalies" width="95%" />
+  <img width="564" height="260" alt="image" src="https://github.com/user-attachments/assets/82b0d20d-e879-41b7-8b20-54f2dc096aa1" />
+
   <br>
   <em><b>Figure 5:</b> Interface Cloudflare R2 (<code>snapshots-medicaux/anomalies/</code>) — Stockage objet sélectif partitionné par dossier patient pour l'archivage médico-légal des anomalies.</em>
 </p>
